@@ -5,8 +5,8 @@ import numpy as np
 import warnings
 from affine import Affine
 from shapely.geometry import shape
-from .io import read_features, Raster
-from .utils import (rasterize_geom, get_percentile, check_stats,
+from io import read_features, Raster
+from utils import (rasterize_geom, rasterize_pctcover, get_percentile, check_stats,
                     remap_categories, key_assoc_val, boxify_points)
 
 
@@ -34,7 +34,8 @@ def gen_zonal_stats(
     add_stats=None,
     raster_out=False,
     prefix=None,
-    geojson_out=False, **kwargs):
+    geojson_out=False,
+    weighted_mean=False, **kwargs):
     """Zonal statistics of raster values aggregated to vector geometries.
 
     Parameters
@@ -123,6 +124,9 @@ def gen_zonal_stats(
         warnings.warn("Use `geojson_out` to preserve feature properties",
                       DeprecationWarning)
 
+    if weighted_mean:
+        all_touched = True
+
     with Raster(raster, affine, nodata, band_num) as rast:
         features_iter = read_features(vectors, layer)
         for i, feat in enumerate(features_iter):
@@ -137,7 +141,8 @@ def gen_zonal_stats(
 
             # create ndarray of rasterized geometry
             rv_array = rasterize_geom(geom, like=fsrc, all_touched=all_touched)
-
+            # print rv_array
+            
             # Mask the source data array with our current feature
             # we take the logical_not to flip 0<->1 for the correct mask effect
             # we also mask out nodata values explicitly
@@ -152,6 +157,10 @@ def gen_zonal_stats(
                 feature_stats = dict([(stat, None) for stat in stats])
                 if 'count' in stats:  # special case, zero makes sense here
                     feature_stats['count'] = 0
+
+                # print fsrc.array
+                # print rv_array
+                print 'z'
             else:
                 if run_count:
                     keys, counts = np.unique(masked.compressed(), return_counts=True)
@@ -165,12 +174,32 @@ def gen_zonal_stats(
                 else:
                     feature_stats = {}
 
+
+
+                if weighted_mean:
+                    pctcover = rasterize_pctcover(geom, atrans=fsrc.affine, shape=fsrc.shape)
+
+                    # weighted_masked =  masked * pctcover
+                    # print masked
+                    # print weighted_masked
+
+
                 if 'min' in stats:
                     feature_stats['min'] = float(masked.min())
                 if 'max' in stats:
                     feature_stats['max'] = float(masked.max())
                 if 'mean' in stats:
-                    feature_stats['mean'] = float(masked.mean())
+                    if weighted_mean:
+                        # print '!'
+                        # print np.sum(np.sum(pctcover, axis=0), axis=0)
+                        # print pctcover / np.sum(np.sum(pctcover, axis=0), axis=0)
+                        # print masked * pctcover / np.sum(np.sum(pctcover, axis=0), axis=0)
+                        # print  "$"
+                        feature_stats['mean'] = float(np.sum(masked * pctcover / np.sum(np.sum(pctcover, axis=0), axis=0)))
+                    else:
+                        feature_stats['mean'] = float(masked.mean())
+
+                    print 'x- ' + str(feature_stats['mean'])
                 if 'count' in stats:
                     feature_stats['count'] = int(masked.count())
                 # optional
