@@ -141,7 +141,6 @@ def gen_zonal_stats(
 
             # create ndarray of rasterized geometry
             rv_array = rasterize_geom(geom, like=fsrc, all_touched=all_touched)
-            # print rv_array
             
             # Mask the source data array with our current feature
             # we take the logical_not to flip 0<->1 for the correct mask effect
@@ -158,9 +157,6 @@ def gen_zonal_stats(
                 if 'count' in stats:  # special case, zero makes sense here
                     feature_stats['count'] = 0
 
-                # print fsrc.array
-                # print rv_array
-                print 'z'
             else:
                 if run_count:
                     keys, counts = np.unique(masked.compressed(), return_counts=True)
@@ -175,13 +171,8 @@ def gen_zonal_stats(
                     feature_stats = {}
 
 
-
                 if weighted_mean:
                     pctcover = rasterize_pctcover(geom, atrans=fsrc.affine, shape=fsrc.shape)
-
-                    # weighted_masked =  masked * pctcover
-                    # print masked
-                    # print weighted_masked
 
 
                 if 'min' in stats:
@@ -190,16 +181,10 @@ def gen_zonal_stats(
                     feature_stats['max'] = float(masked.max())
                 if 'mean' in stats:
                     if weighted_mean:
-                        # print '!'
-                        # print np.sum(np.sum(pctcover, axis=0), axis=0)
-                        # print pctcover / np.sum(np.sum(pctcover, axis=0), axis=0)
-                        # print masked * pctcover / np.sum(np.sum(pctcover, axis=0), axis=0)
-                        # print  "$"
                         feature_stats['mean'] = float(np.sum(masked * pctcover / np.sum(np.sum(pctcover, axis=0), axis=0)))
                     else:
                         feature_stats['mean'] = float(masked.mean())
 
-                    print 'x- ' + str(feature_stats['mean'])
                 if 'count' in stats:
                     feature_stats['count'] = int(masked.count())
                 # optional
