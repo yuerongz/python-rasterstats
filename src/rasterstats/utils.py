@@ -4,7 +4,7 @@ from __future__ import division
 import sys
 from rasterio import features
 from shapely.geometry import box, MultiPolygon
-from io import window_bounds
+from .io import window_bounds
 import numpy as np
 
 DEFAULT_STATS = ['count', 'min', 'max', 'mean']
