@@ -35,7 +35,8 @@ def gen_zonal_stats(
     raster_out=False,
     prefix=None,
     geojson_out=False,
-    weighted_mean=False, **kwargs):
+    weights=False, 
+    **kwargs):
     """Zonal statistics of raster values aggregated to vector geometries.
 
     Parameters
@@ -93,6 +94,9 @@ def gen_zonal_stats(
         with zonal stats appended as additional properties.
         Use with `prefix` to ensure unique and meaningful property names.
 
+    weights: bool of whether to use weights for calculating mean
+
+
     Returns
     -------
     list of dicts (if geojson_out is False)
@@ -124,7 +128,8 @@ def gen_zonal_stats(
         warnings.warn("Use `geojson_out` to preserve feature properties",
                       DeprecationWarning)
 
-    if weighted_mean:
+    tmp_weights = weights
+    if weights:
         all_touched = True
 
     with Raster(raster, affine, nodata, band_num) as rast:
@@ -133,6 +138,7 @@ def gen_zonal_stats(
             geom = shape(feat['geometry'])
 
             if 'Point' in geom.type:
+                tmp_weights = False
                 geom = boxify_points(geom, rast)
 
             geom_bounds = tuple(geom.bounds)
@@ -141,6 +147,7 @@ def gen_zonal_stats(
 
             # create ndarray of rasterized geometry
             rv_array = rasterize_geom(geom, like=fsrc, all_touched=all_touched)
+            # print rv_array
             
             # Mask the source data array with our current feature
             # we take the logical_not to flip 0<->1 for the correct mask effect
@@ -157,6 +164,9 @@ def gen_zonal_stats(
                 if 'count' in stats:  # special case, zero makes sense here
                     feature_stats['count'] = 0
 
+                # print fsrc.array
+                # print rv_array
+                # print 'z'
             else:
                 if run_count:
                     keys, counts = np.unique(masked.compressed(), return_counts=True)
@@ -171,8 +181,12 @@ def gen_zonal_stats(
                     feature_stats = {}
 
 
-                if weighted_mean:
+                if tmp_weights:
                     pctcover = rasterize_pctcover(geom, atrans=fsrc.affine, shape=fsrc.shape)
+
+                    # weighted_masked =  masked * pctcover
+                    # print masked
+                    # print weighted_masked
 
 
                 if 'min' in stats:
@@ -180,11 +194,25 @@ def gen_zonal_stats(
                 if 'max' in stats:
                     feature_stats['max'] = float(masked.max())
                 if 'mean' in stats:
-                    if weighted_mean:
-                        feature_stats['mean'] = float(np.sum(masked * pctcover / np.sum(np.sum(pctcover, axis=0), axis=0)))
+                    if tmp_weights:
+                        # print '!'
+                        # print np.sum(np.sum(pctcover, axis=0), axis=0)
+                        # print pctcover / np.sum(np.sum(pctcover, axis=0), axis=0)
+                        # print masked * pctcover / np.sum(np.sum(pctcover, axis=0), axis=0)
+                        # print  "$"
+
+                        # print ~masked.mask
+                        # print pctcover
+                        # print masked * pctcover
+                        # print masked.count()
+                        # print np.sum(np.sum(pctcover, axis=0), axis=0)
+                        # feature_stats['mean'] = float((masked * pctcover).mean())
+
+                        feature_stats['mean'] = float(np.sum(masked * pctcover / np.sum(np.sum(~masked.mask * pctcover, axis=0), axis=0)))
                     else:
                         feature_stats['mean'] = float(masked.mean())
 
+                    # print 'x- ' + str(feature_stats['mean'])
                 if 'count' in stats:
                     feature_stats['count'] = int(masked.count())
                 # optional
