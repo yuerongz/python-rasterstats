@@ -54,18 +54,19 @@ def rasterize_pctcover(geom, atrans, shape):
         multi_exterior = np.array([_rasterize_geom(Polygon(g).exterior, shape, atrans, all_touched=True) for g in geom])
         exterior = multi_exterior.sum(axis=0)
         exterior[np.where(exterior > 1)] = 1
-        
+
     else:
         exterior = _rasterize_geom(geom.exterior, shape, atrans, all_touched=True)
 
 
     # print alltouched
     # print exterior
-    
+
     # Create percent cover grid as the difference between them
     # at this point all cells are known 100% coverage,
     # we'll update this array for exterior points
     pctcover = (alltouched - exterior) * 100
+    pctcover = pctcover.astype('float32')
     # print pctcover
 
     # loop through indicies of all exterior cells
@@ -89,12 +90,10 @@ def rasterize_pctcover(geom, atrans, shape):
         # print cell.area
         # print coverage
         # print '-'
-
         pctcover[r, c] = coverage
         # print pctcover[r, c]
 
     # print pctcover
-
     out = pctcover.astype('float32') / 100
     # print out
     # print 'x'

@@ -35,7 +35,7 @@ def gen_zonal_stats(
     raster_out=False,
     prefix=None,
     geojson_out=False,
-    weights=False, 
+    weights=False,
     **kwargs):
     """Zonal statistics of raster values aggregated to vector geometries.
 
@@ -148,7 +148,7 @@ def gen_zonal_stats(
             # create ndarray of rasterized geometry
             rv_array = rasterize_geom(geom, like=fsrc, all_touched=all_touched)
             # print rv_array
-            
+
             # Mask the source data array with our current feature
             # we take the logical_not to flip 0<->1 for the correct mask effect
             # we also mask out nodata values explicitly
@@ -194,6 +194,10 @@ def gen_zonal_stats(
                 if 'max' in stats:
                     feature_stats['max'] = float(masked.max())
                 if 'mean' in stats:
+
+                    # print "==="
+                    # print masked
+
                     if tmp_weights:
                         # print '!'
                         # print np.sum(np.sum(pctcover, axis=0), axis=0)
@@ -201,14 +205,15 @@ def gen_zonal_stats(
                         # print masked * pctcover / np.sum(np.sum(pctcover, axis=0), axis=0)
                         # print  "$"
 
-                        # print ~masked.mask
                         # print pctcover
+
                         # print masked * pctcover
-                        # print masked.count()
-                        # print np.sum(np.sum(pctcover, axis=0), axis=0)
+
+                        # print np.sum(np.sum(~masked.mask * pctcover, axis=0), axis=0)
                         # feature_stats['mean'] = float((masked * pctcover).mean())
 
                         feature_stats['mean'] = float(np.sum(masked * pctcover / np.sum(np.sum(~masked.mask * pctcover, axis=0), axis=0)))
+                        # print feature_stats['mean']
                     else:
                         feature_stats['mean'] = float(masked.mean())
 
