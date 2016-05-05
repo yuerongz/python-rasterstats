@@ -102,8 +102,9 @@ def gen_zonal_stats(
     prefix: string
         add a prefix to the keys (default: None)
 
-    save_properties: Returns original features along with specified stats when
-                   geojson_out is set to False.
+    save_properties: boolean
+        Returns original features along with specified stats when
+        geojson_out is set to False.
 
     geojson_out: boolean
         Return list of GeoJSON-like features (default: False)
@@ -119,7 +120,7 @@ def gen_zonal_stats(
     generator of dicts (if geojson_out is False)
         Each item corresponds to a single vector feature and
         contains keys for each of the specified stats.
-        If save_properties is True, also contains original features
+        If save_properties is True, also contains original properties
 
     generator of geojson features (if geojson_out is True)
         GeoJSON-like Feature as python dict
@@ -199,44 +200,18 @@ def gen_zonal_stats(
                 else:
                     feature_stats = {}
 
-
                 if tmp_weights:
                     pctcover = rasterize_pctcover(geom, atrans=fsrc.affine, shape=fsrc.shape)
-
-                    # weighted_masked =  masked * pctcover
-                    # print masked
-                    # print weighted_masked
-
 
                 if 'min' in stats:
                     feature_stats['min'] = float(masked.min())
                 if 'max' in stats:
                     feature_stats['max'] = float(masked.max())
                 if 'mean' in stats:
-
-                    # print "==="
-                    # print masked
-
                     if tmp_weights:
-                        # print '!'
-                        # print np.sum(np.sum(pctcover, axis=0), axis=0)
-                        # print pctcover / np.sum(np.sum(pctcover, axis=0), axis=0)
-                        # print masked * pctcover / np.sum(np.sum(pctcover, axis=0), axis=0)
-                        # print  "$"
-
-                        # print pctcover
-
-                        # print masked * pctcover
-
-                        # print np.sum(np.sum(~masked.mask * pctcover, axis=0), axis=0)
-                        # feature_stats['mean'] = float((masked * pctcover).mean())
-
                         feature_stats['mean'] = float(np.sum(masked * pctcover / np.sum(np.sum(~masked.mask * pctcover, axis=0), axis=0)))
-                        # print feature_stats['mean']
                     else:
                         feature_stats['mean'] = float(masked.mean())
-
-                    # print 'x- ' + str(feature_stats['mean'])
                 if 'count' in stats:
                     feature_stats['count'] = int(masked.count())
                 # optional
