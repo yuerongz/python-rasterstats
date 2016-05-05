@@ -283,13 +283,65 @@ def test_Raster_context():
     assert r2.src.closed
 
 
+def test_Raster_nan():
+    with rasterio.open(raster) as src:
+        win = ((0, src.height), (0, src.width))
+        arr = src.read(1, window=win)
+        affine = src.affine
+        nodata = src.nodata
+
+    assert (arr == nodata).sum() == 320
+
+    # throw in a few nans and run it through Raster
+    arr[20:25, 20:25] = float('nan')  # 25 nans
+    r2 = Raster(arr, affine, nodata, band=1).read(window=win, nan_as_nodata=True)
+
+    assert (r2.array == nodata).sum() == 345  # 25 more nodatas
+    assert np.isnan(r2.array).sum() == 0  # nans were converted to nodata
+
+
+def test_geointerface():
+    class MockGeo(object):
+        def __init__(self, features):
+            self.__geo_interface__ = {
+                'type': "FeatureCollection",
+                'features': features}
+
+        # Make it iterable just to ensure that geo interface
+        # takes precendence over iterability
+        def __iter__(self):
+            pass
+
+        def __next__(self):
+            pass
+
+        def next(self):
+            pass
+
+    features = [{
+        "type": "Feature",
+        "properties": {},
+        "geometry": {
+            "type": "Point",
+            "coordinates": [0, 0]}
+    }, {
+        "type": "Feature",
+        "properties": {},
+        "geometry": {
+            "type": "Polygon",
+            "coordinates": [[[-50, -10], [-40, 10], [-30, -10], [-50, -10]]]}}]
+
+    geothing = MockGeo(features)
+    assert list(read_features(geothing)) == features
+
+
 # Optional tests
 def test_geodataframe():
     try:
         import geopandas as gpd
-        df = gpd.GeoDataFrame.from_file(polygons)
+        df = gpd.read_file(polygons)
         if not hasattr(df, '__geo_interface__'):
             pytest.skip("This version of geopandas doesn't support df.__geo_interface__")
     except ImportError:
         pytest.skip("Can't import geopands")
-    assert read_features(df)
+    assert list(read_features(df))
