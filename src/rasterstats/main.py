@@ -34,6 +34,7 @@ def gen_zonal_stats(
     add_stats=None,
     raster_out=False,
     prefix=None,
+    save_properties=False,
     geojson_out=False,
     weights=False,
     **kwargs):
@@ -89,6 +90,9 @@ def gen_zonal_stats(
 
     prefix: add a prefix to the keys (default: None )
 
+    save_properties: Returns original features along with specified stats when
+                   geojson_out is set to False.
+
     geojson_out: Return list of geojson-like features (default: False)
         original feautur geometry and properties will be retained
         with zonal stats appended as additional properties.
@@ -102,6 +106,7 @@ def gen_zonal_stats(
     list of dicts (if geojson_out is False)
         Each item corresponds to a single vector feature and
         contains keys for each of the specified stats.
+        If save_properties is True, also contains original features
 
     list of geojson features (if geojson_out is True)
         GeoJSON-like Feature as python dict
@@ -125,7 +130,7 @@ def gen_zonal_stats(
 
     cp = kwargs.get('copy_properties')
     if cp:
-        warnings.warn("Use `geojson_out` to preserve feature properties",
+        warnings.warn("Use `geojson_out` or `save_properties` to preserve feature properties",
                       DeprecationWarning)
 
     tmp_weights = weights
@@ -270,11 +275,15 @@ def gen_zonal_stats(
                     prefixed_feature_stats[newkey] = val
                 feature_stats = prefixed_feature_stats
 
-            if geojson_out:
+            if geojson_out or save_properties:
                 for key, val in feature_stats.items():
                     if 'properties' not in feat:
                         feat['properties'] = {}
                     feat['properties'][key] = val
-                yield feat
+
+                if geojson_out:
+                    yield feat
+                else:
+                    yield feat['properties']
             else:
                 yield feature_stats
