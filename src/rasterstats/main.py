@@ -8,7 +8,7 @@ from shapely.geometry import shape
 from .io import read_features, Raster
 from .utils import (rasterize_geom, rasterize_pctcover, get_percentile, check_stats,
                     remap_categories, key_assoc_val, boxify_points)
-
+from copy import copy
 
 def raster_stats(*args, **kwargs):
     """Deprecated. Use zonal_stats instead."""
@@ -43,7 +43,6 @@ def gen_zonal_stats(
     prefix=None,
     save_properties=False,
     geojson_out=False,
-    weights=False,
     **kwargs):
     """Zonal statistics of raster values aggregated to vector geometries.
 
@@ -112,8 +111,6 @@ def gen_zonal_stats(
         with zonal stats appended as additional properties.
         Use with `prefix` to ensure unique and meaningful property names.
 
-    weights: bool of whether to use weights for calculating mean
-
 
     Returns
     -------
@@ -125,7 +122,7 @@ def gen_zonal_stats(
     generator of geojson features (if geojson_out is True)
         GeoJSON-like Feature as python dict
     """
-    stats, run_count = check_stats(stats, categorical)
+    stats, run_count, weights = check_stats(stats, categorical)
 
     # Handle 1.0 deprecations
     transform = kwargs.get('transform')
@@ -147,7 +144,6 @@ def gen_zonal_stats(
         warnings.warn("Use `geojson_out` or `save_properties` to preserve feature properties",
                       DeprecationWarning)
 
-    tmp_weights = weights
     if weights:
         all_touched = True
 
@@ -155,72 +151,116 @@ def gen_zonal_stats(
         features_iter = read_features(vectors, layer)
         for i, feat in enumerate(features_iter):
             geom = shape(feat['geometry'])
+            feature_stats = {}
 
             if 'Point' in geom.type:
-                tmp_weights = False
+                weights = False
                 geom = boxify_points(geom, rast)
 
             geom_bounds = tuple(geom.bounds)
 
-            fsrc = rast.read(bounds=geom_bounds)
 
-            # create ndarray of rasterized geometry
-            rv_array = rasterize_geom(geom, like=fsrc, all_touched=all_touched)
-            # print rv_array
-            assert rv_array.shape == fsrc.shape
+            try:
+                fsrc = rast.read(bounds=geom_bounds)
 
-            # Mask the source data array with our current feature
-            # we take the logical_not to flip 0<->1 for the correct mask effect
-            # we also mask out nodata values explicitly
-            masked = np.ma.MaskedArray(
-                fsrc.array,
-                mask=np.logical_or(
-                    fsrc.array == fsrc.nodata,
-                    np.logical_not(rv_array)))
+                fsrc_nodata = copy(fsrc.nodata)
+                fsrc_affine = copy(fsrc.affine)
+                fsrc_shape = copy(fsrc.shape)
 
-            if masked.compressed().size == 0:
+            except MemoryError:
+                print "Memory Error (fsrc): \n"
+                print feat['properties']
+                continue
+
+
+            try:
+                # create ndarray of rasterized geometry
+                rv_array = rasterize_geom(geom, like=fsrc, all_touched=all_touched)
+
+                assert rv_array.shape == fsrc_shape
+
+            except MemoryError:
+                print "Memory Error (rv_array): \n"
+                print feat['properties']
+                continue
+
+            if 'nodata' in stats:
+                featmasked = np.ma.MaskedArray(fsrc.array, mask=np.logical_not(rv_array))
+                feature_stats['nodata'] = float((featmasked == fsrc_nodata).sum())
+
+            try:
+                # Mask the source data array with our current feature
+                # we take the logical_not to flip 0<->1 for the correct mask effect
+                # we also mask out nodata values explicitly
+                masked = np.ma.MaskedArray(
+                    fsrc.array,
+                    mask=np.logical_or(
+                        fsrc.array == fsrc_nodata,
+                        np.logical_not(rv_array)))
+
+            except MemoryError:
+                print "Memory Error (masked): \n"
+                print feat['properties']
+                continue
+
+
+            del fsrc
+            del rv_array
+
+
+            try:
+                compressed = masked.compressed()
+
+            except MemoryError:
+                print "Memory Error (compressed): \n"
+                print feat['properties']
+                continue
+
+
+            if len(compressed) == 0:
                 # nothing here, fill with None and move on
                 feature_stats = dict([(stat, None) for stat in stats])
                 if 'count' in stats:  # special case, zero makes sense here
                     feature_stats['count'] = 0
 
-                # print fsrc.array
-                # print rv_array
-                # print 'z'
             else:
                 if run_count:
-                    keys, counts = np.unique(masked.compressed(), return_counts=True)
+                    keys, counts = np.unique(compressed, return_counts=True)
                     pixel_count = dict(zip([np.asscalar(k) for k in keys],
                                        [np.asscalar(c) for c in counts]))
+                    if categorical:
+                        feature_stats = dict(pixel_count)
+                        if category_map:
+                            feature_stats = remap_categories(category_map, feature_stats)
 
-                if categorical:
-                    feature_stats = dict(pixel_count)
-                    if category_map:
-                        feature_stats = remap_categories(category_map, feature_stats)
-                else:
-                    feature_stats = {}
+                if weights:
+                    try:
+                        pctcover = rasterize_pctcover(geom, atrans=fsrc_affine, shape=fsrc_shape)
+                    except MemoryError:
+                        print "Memory Error (pctcover): \n"
+                        print feat['properties']
+                        continue
 
-                if tmp_weights:
-                    pctcover = rasterize_pctcover(geom, atrans=fsrc.affine, shape=fsrc.shape)
-
-                if 'min' in stats:
-                    feature_stats['min'] = float(masked.min())
-                if 'max' in stats:
-                    feature_stats['max'] = float(masked.max())
+                if 'weighted_mean' in stats:
+                    feature_stats['weighted_mean'] = float(np.sum(masked * pctcover / np.sum(np.sum(~masked.mask * pctcover, axis=0), axis=0)))
+                if 'weighted_count' in stats:
+                    feature_stats['weighted_count'] = float(np.sum(pctcover))
+                if 'weighted_sum' in stats:
+                    feature_stats['weighted_sum'] = float(np.sum(masked * pctcover))
                 if 'mean' in stats:
-                    if tmp_weights:
-                        feature_stats['mean'] = float(np.sum(masked * pctcover / np.sum(np.sum(~masked.mask * pctcover, axis=0), axis=0)))
-                    else:
-                        feature_stats['mean'] = float(masked.mean())
+                    feature_stats['mean'] = float(compressed.mean())
                 if 'count' in stats:
-                    feature_stats['count'] = int(masked.count())
-                # optional
+                    feature_stats['count'] = int(len(compressed))
                 if 'sum' in stats:
-                    feature_stats['sum'] = float(masked.sum())
+                    feature_stats['sum'] = float(compressed.sum())
+                if 'min' in stats:
+                    feature_stats['min'] = float(compressed.min())
+                if 'max' in stats:
+                    feature_stats['max'] = float(compressed.max())
                 if 'std' in stats:
-                    feature_stats['std'] = float(masked.std())
+                    feature_stats['std'] = float(compressed.std())
                 if 'median' in stats:
-                    feature_stats['median'] = float(np.median(masked.compressed()))
+                    feature_stats['median'] = float(np.median(compressed))
                 if 'majority' in stats:
                     feature_stats['majority'] = float(key_assoc_val(pixel_count, max))
                 if 'minority' in stats:
@@ -231,21 +271,18 @@ def gen_zonal_stats(
                     try:
                         rmin = feature_stats['min']
                     except KeyError:
-                        rmin = float(masked.min())
+                        rmin = float(compressed.min())
                     try:
                         rmax = feature_stats['max']
                     except KeyError:
-                        rmax = float(masked.max())
+                        rmax = float(compressed.max())
                     feature_stats['range'] = rmax - rmin
 
                 for pctile in [s for s in stats if s.startswith('percentile_')]:
                     q = get_percentile(pctile)
-                    pctarr = masked.compressed()
+                    pctarr = compressed
                     feature_stats[pctile] = np.percentile(pctarr, q)
 
-            if 'nodata' in stats:
-                featmasked = np.ma.MaskedArray(fsrc.array, mask=np.logical_not(rv_array))
-                feature_stats['nodata'] = float((featmasked == fsrc.nodata).sum())
 
             if add_stats is not None:
                 for stat_name, stat_func in add_stats.items():
@@ -253,8 +290,8 @@ def gen_zonal_stats(
 
             if raster_out:
                 feature_stats['mini_raster_array'] = masked
-                feature_stats['mini_raster_affine'] = fsrc.affine
-                feature_stats['mini_raster_nodata'] = fsrc.nodata
+                feature_stats['mini_raster_affine'] = fsrc_affine
+                feature_stats['mini_raster_nodata'] = fsrc_nodata
 
             if prefix is not None:
                 prefixed_feature_stats = {}
