@@ -29,12 +29,12 @@ def get_percentile(stat):
     return q
 
 
-def rasterize_geom(geom, like, all_touched=False):
+def rasterize_geom(geom, shape, affine, all_touched=False):
     geoms = [(geom, 1)]
     rv_array = features.rasterize(
         geoms,
-        out_shape=like.shape,
-        transform=like.affine,
+        out_shape=shape,
+        transform=affine,
         fill=0,
         all_touched=all_touched)
     return rv_array
@@ -47,27 +47,26 @@ def rebin_sum(a, shape, dtype):
     return a.reshape(sh).sum(-1, dtype=dtype).sum(1, dtype=dtype)
 
 
-def rasterize_pctcover(geom, atrans, shape):
-    scale = 10
+def rasterize_pctcover(geom, shape, affine, scale=None):
+    """
+    """
+    if scale is None:
+        scale = 10
 
-    pixel_size = atrans[0]/scale
-    topleftlon = atrans[2]
-    topleftlat = atrans[5]
+    min_dtype = np.min_scalar_type(scale**2)
+
+    pixel_size = affine[0]/scale
+    topleftlon = affine[2]
+    topleftlat = affine[5]
 
     new_affine = Affine(pixel_size, 0, topleftlon,
                     0, -pixel_size, topleftlat)
 
     new_shape = (shape[0]*scale, shape[1]*scale)
 
-    rasterized = features.rasterize(
-        [(geom, 1)],
-        out_shape=new_shape,
-        transform=new_affine,
-        fill=0,
-        all_touched=True)
+    rv_array = rasterize_geom(geom, new_shape, new_affine, True)
+    rv_array = rebin_sum(rv_array, shape, min_dtype)
 
-    min_dtype = np.min_scalar_type(scale**2)
-    rv_array = rebin_sum(rasterized, shape, min_dtype)
     return rv_array.astype('float32') / (scale**2)
 
 
