@@ -8,7 +8,7 @@ from shapely.geometry import shape
 from .io import read_features, Raster
 from .utils import (rasterize_geom, get_percentile, check_stats,
                     remap_categories, key_assoc_val, boxify_points,
-                    rasterize_pctcover_geom)
+                    rasterize_pctcover_geom, get_latitude_scale)
 
 
 def raster_stats(*args, **kwargs):
@@ -37,6 +37,7 @@ def gen_zonal_stats(
         affine=None,
         stats=None,
         all_touched=False,
+        latitude_correction=False,
         percent_cover_selection=None,
         percent_cover_weighting=False,
         percent_cover_scale=None,
@@ -84,6 +85,12 @@ def gen_zonal_stats(
         those having a center point within the polygon.
         defaults to `False`
 
+    latitude_correction: bool, optional
+        * For use with WGS84 data only.
+        * Only applies to "mean" stat.
+        Weights cell values when generating statistics based on latitude
+        (using haversine function) in order to account for actual area
+        represented by pixel cell.
     percent_cover_selection: float, optional
         Include only raster cells that have at least the given percent
         covered by the vector feature. Requires percent_cover_scale argument
@@ -259,6 +266,12 @@ def gen_zonal_stats(
                                      'single `zone_array` arg.'))
                 zone_func(masked)
 
+            if latitude_correction and 'mean' in stats:
+                latitude_scale = [
+                    get_latitude_scale(fsrc.affine[5] - fsrc.affine[0] * (0.5 + i))
+                    for i in range(fsrc.shape[0])
+                ]
+
             if masked.compressed().size == 0:
                 # nothing here, fill with None and move on
                 feature_stats = dict([(stat, None) for stat in stats])
@@ -282,12 +295,23 @@ def gen_zonal_stats(
                 if 'max' in stats:
                     feature_stats['max'] = float(masked.max())
                 if 'mean' in stats:
-                    if percent_cover_weighting:
+                    if percent_cover_weighting and latitude_correction:
+                        feature_stats['mean'] = float(
+                            np.sum((masked.T * latitude_scale).T * cover_weights) /
+                            np.sum((~masked.mask.T * latitude_scale).T * cover_weights))
+                    elif percent_cover_weighting:
                         feature_stats['mean'] = float(
                             np.sum(masked * cover_weights) /
                             np.sum(~masked.mask * cover_weights))
+                    elif latitude_correction:
+                        feature_stats['mean'] = float(
+                            np.sum((masked.T * latitude_scale).T) /
+                            np.sum(latitude_scale *
+                                   (masked.shape[1] - np.sum(masked.mask, axis=1))))
                     else:
                         feature_stats['mean'] = float(masked.mean())
+
+
                 if 'count' in stats:
                     if percent_cover_weighting:
                         feature_stats['count'] = float(np.sum(~masked.mask * cover_weights))
