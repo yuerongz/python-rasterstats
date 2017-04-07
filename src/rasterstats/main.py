@@ -227,10 +227,12 @@ def gen_zonal_stats(
                 rv_array = rasterize_pctcover_geom(
                     geom, shape=fsrc.shape, affine=fsrc.affine,
                     scale=percent_cover_scale)
+                cells_touched = rv_array>0.0
             else:
                 rv_array = rasterize_geom(
                     geom, shape=fsrc.shape, affine=fsrc.affine,
                     all_touched=all_touched)
+                cells_touched = rv_array
 
             # nodata mask
             isnodata = (fsrc.array == fsrc.nodata)
@@ -245,11 +247,11 @@ def gen_zonal_stats(
             if percent_cover_selection is not None:
                 masked = np.ma.MaskedArray(
                     fsrc.array,
-                    mask=(isnodata | ~rv_array | percent_cover > percent_cover_selection))
+                    mask=(isnodata | ~cells_touched | percent_cover > percent_cover_selection))
             else:
                 masked = np.ma.MaskedArray(
                     fsrc.array,
-                    mask=(isnodata | ~rv_array))
+                    mask=(isnodata | ~cells_touched))
 
             # execute zone_func on masked zone ndarray
             if zone_func is not None:
@@ -337,6 +339,8 @@ def gen_zonal_stats(
                 feature_stats['mini_raster_array'] = masked
                 feature_stats['mini_raster_affine'] = fsrc.affine
                 feature_stats['mini_raster_nodata'] = fsrc.nodata
+                if percent_cover:
+                    feature_stats['mini_raster_percent_cover'] = rv_array
 
             if prefix is not None:
                 prefixed_feature_stats = {}
