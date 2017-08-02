@@ -312,13 +312,13 @@ def gen_zonal_stats(
                 # rasterized geometry
                 if percent_cover:
                     cover_weights = rasterize_pctcover_geom(
-                        geom, shape=fsrc.shape, affine=fsrc.affine,
+                        sub_geom, shape=fsrc.shape, affine=fsrc.affine,
                         scale=percent_cover_scale,
                         all_touched=all_touched)
                     rv_array = cover_weights > (percent_cover_selection or 0)
                 else:
                     rv_array = rasterize_geom(
-                        geom, shape=fsrc.shape, affine=fsrc.affine,
+                        sub_geom, shape=fsrc.shape, affine=fsrc.affine,
                         all_touched=all_touched)
 
                 # nodata mask
