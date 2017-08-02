@@ -206,10 +206,11 @@ def gen_zonal_stats(
         raise Exception("Cannot use `limit` to split geometries when using "
                         "`add_stats` or `raster_out` options")
 
-    if limit is not None and not percent_cover_weighting:
+    if limit is not None and all_touched and not percent_cover_weighting:
         warnings.warn('Using the `limit` option to split large geometries '
-                      'without also using the `percent_cover_weighting` '
-                      'option may result in less accurate statistics')
+                      'along with the `all_touched` options without also '
+                      'using the `percent_cover_weighting` option may result '
+                      'in less accurate statistics')
 
 
     # -------------------------------------------------------------------------
@@ -373,6 +374,7 @@ def gen_zonal_stats(
                         sub_feature_stats['min'] = float(masked.min())
                     if 'max' in stats:
                         sub_feature_stats['max'] = float(masked.max())
+
                     if 'mean' in stats:
                         if percent_cover_weighting and latitude_correction:
                             sub_feature_stats['mean'] = float(
@@ -390,19 +392,18 @@ def gen_zonal_stats(
                         else:
                             sub_feature_stats['mean'] = float(masked.mean())
 
-
                     if 'count' in stats:
                         if percent_cover_weighting:
                             sub_feature_stats['count'] = float(np.sum(~masked.mask * cover_weights))
                         else:
                             sub_feature_stats['count'] = int(masked.count())
-                    # optional
+
                     if 'sum' in stats:
                         if percent_cover_weighting:
                             sub_feature_stats['sum'] = float(np.sum(masked * cover_weights))
-
                         else:
                             sub_feature_stats['sum'] = float(masked.sum())
+
                     if 'std' in stats:
                         sub_feature_stats['std'] = float(masked.std())
                     if 'median' in stats:
@@ -442,7 +443,6 @@ def gen_zonal_stats(
                     sub_feature_stats['mini_raster_affine'] = fsrc.affine
                     sub_feature_stats['mini_raster_nodata'] = fsrc.nodata
 
-
                 sub_feature_stats_list.append(sub_feature_stats)
 
 
@@ -459,7 +459,6 @@ def gen_zonal_stats(
                     del feature_stats['max']
 
             else:
-
                 feature_stats = {}
 
                 if 'min' in stats:
@@ -488,7 +487,6 @@ def gen_zonal_stats(
                                     feature_stats[field] = sub_stats[field]
                                 else:
                                     feature_stats[field] += sub_stats[field]
-
 
 
             if prefix is not None:
