@@ -46,14 +46,6 @@ def test_zonal_global_extent():
     assert stats == global_stats
 
 
-def test_zonal_nodata():
-    polygons = os.path.join(DATA, 'polygons.shp')
-    stats = zonal_stats(polygons, raster, nodata=0)
-    assert len(stats) == 2
-    assert stats[0]['count'] == 75
-    assert stats[1]['count'] == 50
-
-
 def test_doesnt_exist():
     nonexistent = os.path.join(DATA, 'DOESNOTEXIST.shp')
     with pytest.raises(ValueError):
@@ -226,20 +218,6 @@ def test_all_touched():
     assert stats[1]['count'] == 73  # 50 if ALL_TOUCHED=False
 
 
-def test_latitude_correction():
-    polygon = os.path.join(DATA, 'latitude_correction_polygon.shp')
-    raster = os.path.join(DATA, 'latitude_correction_raster.tif')
-
-    stats_with = zonal_stats(polygon, raster, stats="mean",
-                             latitude_correction=True)
-
-    stats_without = zonal_stats(polygon, raster, stats="mean",
-                                latitude_correction=False)
-
-    assert round(stats_with[0]['mean'], 3) == 25.963
-    assert stats_without[0]['mean'] == 25
-
-
 def test_ndarray_without_affine():
     with rasterio.open(raster) as src:
         polygons = os.path.join(DATA, 'polygons.shp')
@@ -382,66 +360,6 @@ def test_direct_features_collections():
     assert stats_direct == stats_features == stats_collection
 
 
-def test_all_nodata():
-    polygons = os.path.join(DATA, 'polygons.shp')
-    raster = os.path.join(DATA, 'all_nodata.tif')
-    stats = zonal_stats(polygons, raster, stats=['nodata', 'count'])
-    assert stats[0]['nodata'] == 75
-    assert stats[0]['count'] == 0
-    assert stats[1]['nodata'] == 50
-    assert stats[1]['count'] == 0
-
-def test_some_nodata():
-    polygons = os.path.join(DATA, 'polygons.shp')
-    raster = os.path.join(DATA, 'slope_nodata.tif')
-    stats = zonal_stats(polygons, raster, stats=['nodata', 'count'])
-    assert stats[0]['nodata'] == 36
-    assert stats[0]['count'] == 39
-    assert stats[1]['nodata'] == 19
-    assert stats[1]['count'] == 31
-
-
-# update this if nan end up being incorporated into nodata
-def test_nan_nodata():
-    polygon = Polygon([[0, 0], [2, 0], [2, 2], [0, 2]])
-    arr = np.array([
-        [np.nan, 12.25],
-        [-999, 12.75]
-    ])
-    affine = Affine(1, 0, 0,
-                    0, -1, 2)
-
-    stats = zonal_stats(polygon, arr, affine=affine, nodata=-999,
-                        stats='nodata count sum mean min max')
-
-    assert stats[0]['nodata'] == 1
-    assert stats[0]['count'] == 2
-    assert stats[0]['mean'] == 12.5
-    assert stats[0]['min'] == 12.25
-    assert stats[0]['max'] == 12.75
-
-
-def test_some_nodata_ndarray():
-    polygons = os.path.join(DATA, 'polygons.shp')
-    raster = os.path.join(DATA, 'slope_nodata.tif')
-    with rasterio.open(raster) as src:
-        arr = src.read(1)
-        affine = src.affine
-
-    # without nodata
-    stats = zonal_stats(polygons, arr, affine=affine, stats=['nodata', 'count', 'min'])
-    assert stats[0]['min'] == -9999.0
-    assert stats[0]['nodata'] == 0
-    assert stats[0]['count'] == 75
-
-    # with nodata
-    stats = zonal_stats(polygons, arr, affine=affine,
-                        nodata=-9999.0, stats=['nodata', 'count', 'min'])
-    assert stats[0]['min'] >= 0.0
-    assert stats[0]['nodata'] == 36
-    assert stats[0]['count'] == 39
-
-
 def test_transform():
     with rasterio.open(raster) as src:
         arr = src.read(1)
@@ -503,6 +421,79 @@ def test_copy_properties_warn():
     assert stats_a == stats_b
 
 
+# -----------------------------------------------------------------------------
+# nodata tests
+
+
+def test_zonal_nodata():
+    polygons = os.path.join(DATA, 'polygons.shp')
+    stats = zonal_stats(polygons, raster, nodata=0)
+    assert len(stats) == 2
+    assert stats[0]['count'] == 75
+    assert stats[1]['count'] == 50
+
+
+def test_all_nodata():
+    polygons = os.path.join(DATA, 'polygons.shp')
+    raster = os.path.join(DATA, 'all_nodata.tif')
+    stats = zonal_stats(polygons, raster, stats=['nodata', 'count'])
+    assert stats[0]['nodata'] == 75
+    assert stats[0]['count'] == 0
+    assert stats[1]['nodata'] == 50
+    assert stats[1]['count'] == 0
+
+
+def test_some_nodata():
+    polygons = os.path.join(DATA, 'polygons.shp')
+    raster = os.path.join(DATA, 'slope_nodata.tif')
+    stats = zonal_stats(polygons, raster, stats=['nodata', 'count'])
+    assert stats[0]['nodata'] == 36
+    assert stats[0]['count'] == 39
+    assert stats[1]['nodata'] == 19
+    assert stats[1]['count'] == 31
+
+
+# update this if nan end up being incorporated into nodata
+def test_nan_nodata():
+    polygon = Polygon([[0, 0], [2, 0], [2, 2], [0, 2]])
+    arr = np.array([
+        [np.nan, 12.25],
+        [-999, 12.75]
+    ])
+    affine = Affine(1, 0, 0,
+                    0, -1, 2)
+
+    stats = zonal_stats(polygon, arr, affine=affine, nodata=-999,
+                        stats='nodata count sum mean min max')
+
+    assert stats[0]['nodata'] == 1
+    assert stats[0]['count'] == 2
+    assert stats[0]['mean'] == 12.5
+    assert stats[0]['min'] == 12.25
+    assert stats[0]['max'] == 12.75
+
+
+def test_some_nodata_ndarray():
+    polygons = os.path.join(DATA, 'polygons.shp')
+    raster = os.path.join(DATA, 'slope_nodata.tif')
+    with rasterio.open(raster) as src:
+        arr = src.read(1)
+        affine = src.affine
+
+    # without nodata
+    stats = zonal_stats(polygons, arr, affine=affine, stats=['nodata', 'count', 'min'])
+    assert stats[0]['min'] == -9999.0
+    assert stats[0]['nodata'] == 0
+    assert stats[0]['count'] == 75
+
+    # with nodata
+    stats = zonal_stats(polygons, arr, affine=affine,
+                        nodata=-9999.0, stats=['nodata', 'count', 'min'])
+    assert stats[0]['min'] >= 0.0
+    assert stats[0]['nodata'] == 36
+    assert stats[0]['count'] == 39
+
+
 def test_nan_counts():
     from affine import Affine
     transform = Affine(1, 0, 1, 0, -1, 3)
@@ -532,6 +523,9 @@ def test_nan_counts():
         assert res['nodata'] == 3  # 3 pixels of nodata
         assert 'nan' not in res
 
+
+# -----------------------------------------------------------------------------
+# percent cover and latitude correction tests
 
 def test_percent_cover_zonal_stats():
     polygon = Polygon([[0, 0], [0, 0,5], [1, 1.5], [1.5, 2], [2, 2], [2, 0]])
@@ -571,22 +565,18 @@ def test_percent_cover_zonal_stats():
         zonal_stats(polygon, arr, affine=affine, percent_cover_selection='one', percent_cover_scale=10)
 
 
-# -----------------------------------------------------------------------------
-# Optional tests
+def test_latitude_correction():
+    polygon = os.path.join(DATA, 'latitude_correction_polygon.shp')
+    raster = os.path.join(DATA, 'latitude_correction_raster.tif')
 
-def test_geodataframe_zonal():
-    polygons = os.path.join(DATA, 'polygons.shp')
+    stats_with = zonal_stats(polygon, raster, stats="mean",
+                             latitude_correction=True)
 
-    try:
-        import geopandas as gpd
-        df = gpd.read_file(polygons)
-        if not hasattr(df, '__geo_interface__'):
-            pytest.skip("This version of geopandas doesn't support df.__geo_interface__")
-    except ImportError:
-        pytest.skip("Can't import geopands")
+    stats_without = zonal_stats(polygon, raster, stats="mean",
+                                latitude_correction=False)
 
-    expected = zonal_stats(polygons, raster)
-    assert zonal_stats(df, raster) == expected
+    assert round(stats_with[0]['mean'], 3) == 25.963
+    assert stats_without[0]['mean'] == 25
 
 
 # -----------------------------------------------------------------------------
@@ -615,3 +605,22 @@ def test_geom_split_categorical():
     assert len(stats1) == len(stats2) == 2
     assert stats1[0][1.0] == stats2[0][1.0]  == 75
     assert 5.0 in stats1[1] and 5.0 in stats2[1]
+
+
+# -----------------------------------------------------------------------------
+# optional tests
+
+def test_geodataframe_zonal():
+    polygons = os.path.join(DATA, 'polygons.shp')
+
+    try:
+        import geopandas as gpd
+        df = gpd.read_file(polygons)
+        if not hasattr(df, '__geo_interface__'):
+            pytest.skip("This version of geopandas doesn't support df.__geo_interface__")
+    except ImportError:
+        pytest.skip("Can't import geopands")
+
+    expected = zonal_stats(polygons, raster)
+    assert zonal_stats(df, raster) == expected
+
