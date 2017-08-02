@@ -2,10 +2,12 @@
 from __future__ import absolute_import
 from __future__ import division
 import sys
+import math
 from rasterio import features
+from affine import Affine
+from numpy import min_scalar_type
 from shapely.geometry import box, MultiPolygon
 from .io import window_bounds
-
 
 DEFAULT_STATS = ['count', 'min', 'max', 'mean']
 VALID_STATS = DEFAULT_STATS + \
@@ -25,12 +27,13 @@ def get_percentile(stat):
     return q
 
 
-def rasterize_geom(geom, like, all_touched=False):
+def rasterize_geom(geom, shape, affine, all_touched=False):
     """
     Parameters
     ----------
     geom: GeoJSON geometry
-    like: raster object with desired shape and transform
+    shape: desired shape
+    affine: desired transform
     all_touched: rasterization strategy
 
     Returns
@@ -40,13 +43,53 @@ def rasterize_geom(geom, like, all_touched=False):
     geoms = [(geom, 1)]
     rv_array = features.rasterize(
         geoms,
-        out_shape=like.shape,
-        transform=like.affine,
+        out_shape=shape,
+        transform=affine,
         fill=0,
         dtype='uint8',
         all_touched=all_touched)
-
     return rv_array.astype(bool)
+
+
+# https://stackoverflow.com/questions/8090229/
+#   resize-with-averaging-or-rebin-a-numpy-2d-array/8090605#8090605
+def rebin_sum(a, shape, dtype):
+    sh = shape[0],a.shape[0]//shape[0],shape[1],a.shape[1]//shape[1]
+    return a.reshape(sh).sum(-1, dtype=dtype).sum(1, dtype=dtype)
+
+
+def rasterize_pctcover_geom(geom, shape, affine, scale=None, all_touched=False):
+    """
+    Parameters
+    ----------
+    geom: GeoJSON geometry
+    shape: desired shape
+    affine: desired transform
+    scale: scale at which to generate percent cover estimate
+
+    Returns
+    -------
+    ndarray: float32
+    """
+    if scale is None:
+        scale = 10
+    min_dtype = min_scalar_type(scale**2)
+
+    pixel_size_lon = affine[0]/scale
+    pixel_size_lat = affine[4]/scale
+    
+    topleftlon = affine[2]
+    topleftlat = affine[5]
+
+    new_affine = Affine(pixel_size_lon, 0, topleftlon,
+                        0, pixel_size_lat, topleftlat)
+
+    new_shape = (shape[0]*scale, shape[1]*scale)
+
+    rv_array = rasterize_geom(geom, new_shape, new_affine, all_touched=all_touched)
+    rv_array = rebin_sum(rv_array, shape, min_dtype)
+    
+    return rv_array.astype('float32') / (scale**2)
 
 
 def stats_to_csv(stats):
@@ -146,3 +189,58 @@ def boxify_points(geom, rast):
         geoms.append(box(*window_bounds(win, rast.affine)).buffer(buff))
 
     return MultiPolygon(geoms)
+
+
+def get_latitude_scale(lat):
+    """get ratio of longitudal measurement at a latitiude relative to equator
+
+    at the equator, the distance between 0 and 0.008993216 degrees
+    longitude is very nearly 1km. this allows the distance returned
+    by the calc_haversine_distance function when using 0 and 0.008993216
+    degrees longitude, with constant latitude, to server as a scale
+    of the distance between lines of longitude at the given latitude
+
+    Args
+        lat (int, float): a latitude value
+    Returns
+        ratio (float): ratio of actual distance (km) between two lines of
+                       longitude at a given latitude and at the equator,
+                       when the distance between those lines at the equator
+                       is 1km
+    """
+    p1 = (0, lat)
+    p2 = (0.008993216, lat)
+    ratio = calc_haversine_distance(p1, p2)
+    return ratio
+
+
+def calc_haversine_distance(p1, p2):
+    """calculate haversine distance between two points
+
+    # formula info
+    # https://en.wikipedia.org/wiki/Haversine_formula
+    # http://www.movable-type.co.uk/scripts/latlong.html
+
+    Args
+        p1: tuple of (longitude, latitude) format containing int or float values
+        p2: tuple of (longitude, latitude) format containing int or float values
+    Returns
+        d (float): haversine distance between given points p1 and p2
+    """
+    lon1, lat1 = p1
+    lon2, lat2 = p2
+
+    # km
+    radius = 6371.0
+
+    delta_lat = math.radians(lat2 - lat1)
+    delta_lon = math.radians(lon2 - lon1)
+
+    a = (math.sin(delta_lat/2)**2 + math.cos(math.radians(lat1)) *
+         math.cos(math.radians(lat2)) * math.sin(delta_lon/2)**2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+
+    # km
+    d = radius * c
+
+    return d

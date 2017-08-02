@@ -1,9 +1,14 @@
 import sys
 import os
 import pytest
-from shapely.geometry import LineString
+import numpy as np
+from affine import Affine
+from shapely.geometry import LineString, Polygon
 from rasterstats.utils import \
-    stats_to_csv, get_percentile, remap_categories, boxify_points
+    stats_to_csv, get_percentile, remap_categories, boxify_points, \
+    get_latitude_scale, calc_haversine_distance, \
+    rebin_sum, rasterize_pctcover_geom
+    
 from rasterstats import zonal_stats
 from rasterstats.utils import VALID_STATS
 
@@ -63,3 +68,53 @@ def test_boxify_non_point():
     line = LineString([(0, 0), (1, 1)])
     with pytest.raises(ValueError):
         boxify_points(line, None)
+
+
+def test_calc_haversine_distance():
+    test_val = calc_haversine_distance((10,20.563),(22.22,35.3))
+    assert round(test_val, 3) == 2027.46
+
+
+def test_get_latitude_scale():
+    lat = 20
+    p1 = (0, lat)
+    p2 = (0.008993216, lat)
+    assert get_latitude_scale(20) == calc_haversine_distance(p1, p2)
+
+def test_rebin_sum():
+    test_input = np.array(
+        [
+            [1, 1, 2, 2],
+            [1, 1, 2, 2],
+            [3, 3, 4, 4],
+            [3, 3, 4, 4]
+        ])
+    test_output = rebin_sum(test_input, (2,2), np.int32)
+    correct_output = np.array([[4, 8],[12, 16]])
+    assert np.array_equal(test_output, correct_output)
+
+
+def test_rasterize_pctcover_geom():
+    polygon_a = Polygon([[0, 0], [2, 0], [2, 2], [0, 2]])
+    shape_a = (2, 2)
+    affine_a = Affine(1, 0, 0,
+                      0, -1, 2)
+    pct_cover_a = rasterize_pctcover_geom(polygon_a, shape_a, affine_a, scale=10, all_touched=False)
+    correct_output_a = np.array([[1, 1], [1, 1]])
+    assert np.array_equal(pct_cover_a, correct_output_a)
+
+    polygon_b = Polygon([[0.5, 0.5], [1.5, 0.5], [1.5, 1.5], [0.5, 1.5]])
+    shape_b = (2, 2)
+    affine_b = Affine(1, 0, 0,
+                      0, -1, 2)
+    pct_cover_b = rasterize_pctcover_geom(polygon_b, shape_b, affine_b, scale=10, all_touched=False)
+    correct_output_b = np.array([[0.25, 0.25], [0.25, 0.25]])
+    assert np.array_equal(pct_cover_b, correct_output_b)
+
+    polygon_c = Polygon([[0.5, 0.5], [1.5, 0.5], [1.5, 1.5], [0.5, 1.5]])
+    shape_c = (2, 2)
+    affine_c = Affine(1, 0, 0,
+                      0, -1, 2)
+    pct_cover_c = rasterize_pctcover_geom(polygon_c, shape_c, affine_c, scale=100, all_touched=False)
+    correct_output_c = np.array([[0.25, 0.25], [0.25, 0.25]])
+    assert np.array_equal(pct_cover_c, correct_output_c)

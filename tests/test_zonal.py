@@ -226,6 +226,20 @@ def test_all_touched():
     assert stats[1]['count'] == 73  # 50 if ALL_TOUCHED=False
 
 
+def test_latitude_correction():
+    polygon = os.path.join(DATA, 'latitude_correction_polygon.shp')
+    raster = os.path.join(DATA, 'latitude_correction_raster.tif')
+
+    stats_with = zonal_stats(polygon, raster, stats="mean",
+                             latitude_correction=True)
+
+    stats_without = zonal_stats(polygon, raster, stats="mean",
+                                latitude_correction=False)
+
+    assert round(stats_with[0]['mean'], 3) == 25.963
+    assert stats_without[0]['mean'] == 25
+
+
 def test_ndarray_without_affine():
     with rasterio.open(raster) as src:
         polygons = os.path.join(DATA, 'polygons.shp')
@@ -458,7 +472,6 @@ def test_geojson_out():
         assert 'count' in feature['properties']  # from zonal stats
 
 
-
 # do not think this is actually testing the line i wanted it to
 # since the read_features func for this data type is generating
 # the properties field
@@ -518,6 +531,44 @@ def test_nan_counts():
         assert res['count'] == 3  # 3 pixels of valid data
         assert res['nodata'] == 3  # 3 pixels of nodata
         assert 'nan' not in res
+
+
+def test_percent_cover_zonal_stats():
+    polygon = Polygon([[0, 0], [0, 0,5], [1, 1.5], [1.5, 2], [2, 2], [2, 0]])
+    arr = np.array([
+        [100, 1],
+        [100, 1]
+    ])
+    affine = Affine(1, 0, 0,
+                    0, -1, 2)
+
+    stats_options = 'min max mean count sum nodata'
+
+    # run base case
+    stats_a = zonal_stats(polygon, arr, affine=affine, stats=stats_options)
+    assert stats_a[0]['mean'] == 34
+
+    # test selection
+    stats_b = zonal_stats(polygon, arr, affine=affine, percent_cover_selection=0.75, percent_cover_scale=10, stats=stats_options)
+    assert stats_b[0]['mean'] == 1
+
+    # test weighting
+    stats_c = zonal_stats(polygon, arr, affine=affine, percent_cover_weighting=True, percent_cover_scale=10, stats=stats_options)
+    assert round(stats_c[0]['count'], 2) == 2.6
+    assert round(stats_c[0]['mean'], 2) == 29.56
+    assert round(stats_c[0]['sum'], 2) == 76.85
+
+    # check that percent_cover_scale is set to 10 when not provided by user
+    stats_d = zonal_stats(polygon, arr, affine=affine, percent_cover_weighting=True, stats=stats_options)
+    assert round(stats_d[0]['mean'], 2) == round(stats_c[0]['mean'], 2)
+
+    # check invalid percent_cover_scale value
+    with pytest.raises(Exception):
+        zonal_stats(polygon, arr, affine=affine, percent_cover_selection=0.75, percent_cover_scale=0.5)
+
+    # check invalid percent_cover_selection value
+    with pytest.raises(Exception):
+        zonal_stats(polygon, arr, affine=affine, percent_cover_selection='one', percent_cover_scale=10)
 
 
 # Optional tests
