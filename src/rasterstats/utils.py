@@ -27,6 +27,56 @@ def get_percentile(stat):
     return q
 
 
+def split_geom(geom, limit, pixel_size):
+    """ split geometry into smaller geometries
+
+    used to convert large features into multiple smaller features
+    so that they can be used without running into memory limits
+
+    Parameters
+    ----------
+    geom: geometry
+    limit: maximum number of pixels
+    pixel_size: pixel size of raster data geometry will be extracting
+
+    Returns
+    -------
+    list of geometries
+    """
+    split_geom_list = []
+
+    gb = tuple(geom.bounds)
+
+    x_size = (gb[2] - gb[0]) / pixel_size
+    y_size = (gb[3] - gb[1]) / pixel_size
+    total_size = x_size * y_size
+
+    if total_size < limit:
+        return [geom]
+
+    if x_size > y_size:
+        x_split = gb[2] - (gb[2]-gb[0])/2
+        box_a_bounds = (gb[0], gb[1], x_split, gb[3])
+        box_b_bounds = (x_split, gb[1], gb[2], gb[3])
+
+    else:
+        y_split = gb[3] - (gb[3]-gb[1])/2
+        box_a_bounds = (gb[0], gb[1], gb[2], y_split)
+        box_b_bounds = (gb[0], y_split, gb[2], gb[3])
+
+    box_a = box(*box_a_bounds)
+    geom_a = geom.intersection(box_a)
+    split_a = split_geom(geom_a, limit, pixel_size)
+    split_geom_list += split_a
+
+    box_b = box(*box_b_bounds)
+    geom_b = geom.intersection(box_b)
+    split_b = split_geom(geom_b, limit, pixel_size)
+    split_geom_list += split_b
+
+    return split_geom_list
+
+
 def rasterize_geom(geom, shape, affine, all_touched=False):
     """
     Parameters
@@ -77,7 +127,7 @@ def rasterize_pctcover_geom(geom, shape, affine, scale=None, all_touched=False):
 
     pixel_size_lon = affine[0]/scale
     pixel_size_lat = affine[4]/scale
-    
+
     topleftlon = affine[2]
     topleftlat = affine[5]
 
@@ -88,7 +138,7 @@ def rasterize_pctcover_geom(geom, shape, affine, scale=None, all_touched=False):
 
     rv_array = rasterize_geom(geom, new_shape, new_affine, all_touched=all_touched)
     rv_array = rebin_sum(rv_array, shape, min_dtype)
-    
+
     return rv_array.astype('float32') / (scale**2)
 
 
