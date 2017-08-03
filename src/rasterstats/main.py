@@ -287,11 +287,6 @@ def gen_zonal_stats(
 
                 geom_list = split_geom(geom, limit, pixel_size)
 
-                # should be able to get rid of this if split_geom function is built properly
-                if len(geom_list) < 1:
-                    raise Exception("Error producing split geometries")
-
-
 
             # -----------------------------------------------------------------
             # run sub geom extracts

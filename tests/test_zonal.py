@@ -582,8 +582,23 @@ def test_latitude_correction():
 # -----------------------------------------------------------------------------
 # test geom splits
 
+
+def test_geom_split_invalid():
+    for i in ['minority', 'majority', 'median', 'std', 'unique', 'percentile_50']
+        with pytest.raises(Exception):
+            zonal_stats(polygons, raster, limit=50, stats=i)
+    with pytest.raises(Exception):
+        zonal_stats(polygons, raster, limit=50, raster_out=True)
+    with pytest.raises(Exception):
+        zonal_stats(polygons, raster, limit=50, zone_func='function')
+    with pytest.warns(Warning):
+        zonal_stats(polygons, raster, limit=50, all_touched=True)
+
+
 def test_geom_split_main():
     polygons = os.path.join(DATA, 'polygons.shp')
+    stats0 = zonal_stats(polygons, raster, limit=50, stats="mean")
+        assert 'count' in stats0[0]
     stats1 = zonal_stats(polygons, raster)
     stats2 = zonal_stats(polygons, raster, limit=50)
     for key in ['count', 'min', 'max', 'mean']:
