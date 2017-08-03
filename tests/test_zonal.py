@@ -607,6 +607,21 @@ def test_geom_split_categorical():
     assert 5.0 in stats1[1] and 5.0 in stats2[1]
 
 
+def test_geom_split_percent_cover():
+    polygons = os.path.join(DATA, 'polygons.shp')
+    stats1 = zonal_stats(polygons, raster, percent_cover_weighting=True)
+    stats2 = zonal_stats(polygons, raster, limit=50, percent_cover_weighting=True)
+    for key in ['count', 'min', 'max', 'mean']:
+        assert key in stats1[0]
+        assert key in stats2[0]
+    assert len(stats1) == len(stats2) == 2
+    assert round(stats1[0]['count'], 2) == round(stats2[0]['count'], 2) == 77.52
+    assert round(stats1[1]['count'], 2) == round(stats2[1]['count'], 2) == 52.18
+    assert stats1[0]['min'] == stats2[0]['min']
+    assert stats1[0]['max'] == stats2[0]['max']
+    assert round(stats1[0]['mean'], 2) == round(stats2[0]['mean'], 2) == 15.04
+
+
 # -----------------------------------------------------------------------------
 # optional tests
 
