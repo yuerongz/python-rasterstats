@@ -129,7 +129,7 @@ def test_split_geom():
     polygon_b =  Point(0,0).buffer(10)
     geom_list_b = split_geom(polygon_b, limit=150, pixel_size=1)
     assert len(geom_list_b) == 4
-    for i in geom_list_v:
+    for i in geom_list_b:
         assert round(i.area, 2) == 78.41
 
 
