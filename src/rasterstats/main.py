@@ -297,7 +297,7 @@ def gen_zonal_stats(
             # run sub geom extracts
 
             sub_feature_stats_list = []
-
+            print len(geom_list)
             for sub_geom in geom_list:
 
                 sub_geom = shape(sub_geom)

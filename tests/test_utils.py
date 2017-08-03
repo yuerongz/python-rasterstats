@@ -3,12 +3,12 @@ import os
 import pytest
 import numpy as np
 from affine import Affine
-from shapely.geometry import LineString, Polygon
+from shapely.geometry import LineString, Polygon, Point, box
 from rasterstats.utils import \
     stats_to_csv, get_percentile, remap_categories, boxify_points, \
     get_latitude_scale, calc_haversine_distance, \
-    rebin_sum, rasterize_pctcover_geom
-    
+    rebin_sum, rasterize_pctcover_geom, split_geom
+
 from rasterstats import zonal_stats
 from rasterstats.utils import VALID_STATS
 
@@ -118,3 +118,21 @@ def test_rasterize_pctcover_geom():
     pct_cover_c = rasterize_pctcover_geom(polygon_c, shape_c, affine_c, scale=100, all_touched=False)
     correct_output_c = np.array([[0.25, 0.25], [0.25, 0.25]])
     assert np.array_equal(pct_cover_c, correct_output_c)
+
+
+def test_split_geom():
+    polygon_a = box(0, 0, 10, 10)
+    geom_list_a = split_geom(polygon_a, limit=50, pixel_size=1)
+    assert len(geom_list_a) == 4
+    for i in geom_list_a:
+        assert i.area == 25
+    polygon_b =  Point(0,0).buffer(10)
+    geom_list_b = split_geom(polygon_b, limit=150, pixel_size=1)
+    assert len(geom_list_b) == 4
+    for i in geom_list_v:
+        assert round(i.area, 2) == 78.41
+
+
+
+
+
