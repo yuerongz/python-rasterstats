@@ -610,6 +610,8 @@ def test_geom_split_main():
     assert stats1[0]['min'] == stats2[0]['min']
     assert stats1[0]['max'] == stats2[0]['max']
     assert round(stats1[0]['mean'], 2) == round(stats2[0]['mean'], 2) == 14.66
+    all_valid_limit_stats = 'mean max min count sum range nodata nan'
+    stats3 = zonal_stats(polygons, raster, limit=50, stats=all_valid_limit_stats)
 
 
 def test_geom_split_categorical():
