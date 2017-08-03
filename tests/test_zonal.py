@@ -598,7 +598,7 @@ def test_geom_split_invalid():
 def test_geom_split_main():
     polygons = os.path.join(DATA, 'polygons.shp')
     stats0 = zonal_stats(polygons, raster, limit=50, stats="mean")
-        assert 'count' in stats0[0]
+    assert 'count' in stats0[0]
     stats1 = zonal_stats(polygons, raster)
     stats2 = zonal_stats(polygons, raster, limit=50)
     for key in ['count', 'min', 'max', 'mean']:
