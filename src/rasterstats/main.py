@@ -473,7 +473,12 @@ def gen_zonal_stats(
                 if 'nan' in stats:
                     feature_stats['nan'] = sum([i['nan'] for i in sub_feature_stats_list])
                 if 'mean' in stats:
-                    feature_stats['mean'] = sum([i['mean'] * i['count'] for i in sub_feature_stats_list]) / sum([i['count'] for i in sub_feature_stats_list])
+                    weighted_vals = [i['mean'] * i['count'] for i in sub_feature_stats_list if i['mean'] is not None]
+                    if weighted_vals:
+                        feature_stats['mean'] = sum(weighted_vals) / sum([i['count'] for i in sub_feature_stats_list])
+                    else:
+                        feature_stats['mean'] = None
+
                 if categorical:
                     for sub_stats in sub_feature_stats_list:
                         for field in sub_stats:
