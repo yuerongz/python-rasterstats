@@ -280,12 +280,10 @@ def gen_zonal_stats(
                 # need count for sub geoms to calculate weighted mean
                 if 'mean' in stats and not 'count' in stats:
                     stats.append('count')
-                pixel_size = rast.affine[0]
-                x_size = (geom_bounds[2] - geom_bounds[0]) / pixel_size
-                y_size = (geom_bounds[3] - geom_bounds[1]) / pixel_size
-                total_size = x_size * y_size
 
-                geom_list = split_geom(geom, limit, pixel_size)
+                pixel_size = rast.affine[0]
+                origin = (rast.affine[2], rast.affine[5])
+                geom_list = split_geom(geom, limit, pixel_size, origin=origin)
 
 
             # -----------------------------------------------------------------
