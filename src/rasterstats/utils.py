@@ -44,11 +44,12 @@ def round_to_grid(point, origin, pixel_size):
     """
     x_val, y_val = point
     x_origin, y_origin = origin
-    if x_val < x_origin or y_val < y_origin:
-        raise Exception("Longitude/latitude values for point cannot be less than "
-                        "the longitude/latitude values for the origin.")
+    if x_val < x_origin or y_val > y_origin:
+        raise Exception("Longitude/latitude values for point cannot be outside "
+                        "the box with upper left corner defined by origin "
+                        "[point: {0}, origin: {1}].".format(point, origin))
     adj_x_val = round((x_val - x_origin) / pixel_size) * pixel_size + x_origin
-    adj_y_val = round((y_val - y_origin) / pixel_size) * pixel_size + y_origin
+    adj_y_val = y_origin - round((y_origin - y_val) / pixel_size) * pixel_size
     return (adj_x_val, adj_y_val)
 
 
@@ -82,25 +83,28 @@ def split_geom(geom, limit, pixel_size, origin=None):
     if x_size > y_size:
         x_split = gb[2] - (gb[2]-gb[0])/2
         if origin is not None:
-            x_split = round_to_grid((x_split, origin[1]), origin, pixel_size)[0]
-        box_a_bounds = (gb[0], gb[1], x_split, gb[3])
-        box_b_bounds = (x_split, gb[1], gb[2], gb[3])
+            x_split, _ = round_to_grid((x_split, origin[1]), origin, pixel_size)
+        box_a_bounds = (gb[0], gb[1], x_split-pixel_size*0.0000001, gb[3])
+        box_b_bounds = (x_split+pixel_size*0.0000001, gb[1], gb[2], gb[3])
 
     else:
         y_split = gb[3] - (gb[3]-gb[1])/2
         if origin is not None:
-            y_split = round_to_grid((origin[0], y_split), origin, pixel_size)[1]
-        box_a_bounds = (gb[0], gb[1], gb[2], y_split)
-        box_b_bounds = (gb[0], y_split, gb[2], gb[3])
+            _, y_split = round_to_grid((origin[0], y_split), origin, pixel_size)
+        box_a_bounds = (gb[0], gb[1], gb[2], y_split-pixel_size*0.0000001)
+        box_b_bounds = (gb[0], y_split+pixel_size*0.0000001, gb[2], gb[3])
 
+    # minx, miny, maxx, maxy
     box_a = box(*box_a_bounds)
-    geom_a = geom.intersection(box_a)
-    split_a = split_geom(geom_a, limit, pixel_size)
+    split_a = split_geom(box_a, limit, pixel_size, origin=origin)
+    # geom_a = geom.intersection(box_a)
+    # split_a = split_geom(geom_a, limit, pixel_size, origin=origin)
     split_geom_list += split_a
 
     box_b = box(*box_b_bounds)
-    geom_b = geom.intersection(box_b)
-    split_b = split_geom(geom_b, limit, pixel_size)
+    split_b = split_geom(box_b, limit, pixel_size, origin=origin)
+    # geom_b = geom.intersection(box_b)
+    # split_b = split_geom(geom_b, limit, pixel_size, origin=origin)
     split_geom_list += split_b
 
     return split_geom_list
@@ -164,6 +168,7 @@ def rasterize_pctcover_geom(geom, shape, affine, scale=None, all_touched=False):
     new_shape = (shape[0]*scale, shape[1]*scale)
 
     rv_array = rasterize_geom(geom, new_shape, new_affine, all_touched=all_touched)
+    # print rv_array
     rv_array = rebin_sum(rv_array, shape, min_dtype)
 
     return rv_array.astype('float32') / (scale**2)

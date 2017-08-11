@@ -110,11 +110,14 @@ def gen_zonal_stats(
         (based on percent_cover_scale value) then using a summation to aggregate
         to the raster resolution and dividing by the square of percent_cover_scale
         to get percent coverage value for each cell. Increasing percent_cover_scale
-        will increase the accuracy of percent coverage values; three orders
+        will increase the accuracy of percent coverage values. Three orders
         magnitude finer resolution (percent_cover_scale=1000) is usually enough to
         get coverage estimates with <1% error in individual edge cells coverage
-        estimates, though much smaller values (e.g., percent_cover_scale=10) are often
-        sufficient (<10% error) and require less memory.
+        estimates, but the limited meaningful accuracy improvements this results in
+        (compared to lower percent_cover_scale values, e.g., 10) are generally
+        not worth the signficant additional computation cost and processing time.
+        Values (e.g., percent_cover_scale=10) are often sufficient
+        (<10% edge cell error) and require far less memory and time to run.
 
     limit: int
         maximum number of pixels allowed to be read from raster based on
@@ -123,12 +126,13 @@ def gen_zonal_stats(
         aggregated (note: some stats and options cannot be used along with
         `limit`. Useful when dealing with vector data containing
         large features and raster with a fine resolution to prevent
-        memory errors. Estimated pixels per GB vary depending on options,
-        but a rough range is 5 to 80 million pixels per GB of memory. If
-        values is None (default) geometries will never be split. Using the
-        `limit` option without also using the `percent_cover_weighting`
-        option may result in less accurate statistics due to generating
-        additional polygon edges when splitting geometries.
+        memory errors. If the limit value is None (default) or 0
+        geometries will never be split. Using the `limit` option without
+        also using the `percent_cover_weighting`option may result in less
+        accurate statistics due to generating additional polygon edges when
+        splitting geometries. When using percent_cover_scale of 10, a limit
+        of 5 million pixels is generally reasonably quick and should run
+        with <4GB of RAM.
 
     categorical: bool, optional
 
@@ -193,24 +197,28 @@ def gen_zonal_stats(
     # -------------------------------------------------------------------------
     # make sure feature split/aggregations will work with options provided
 
-    invalid_limit_stats = [
-        'minority', 'majority', 'median', 'std', 'unique'
-    ] + [s for s in stats if s.startswith('percentile_')]
 
-    invalid_limit_conditions = (
-        any([i in invalid_limit_stats for i in stats])
-        or add_stats is not None
-        or raster_out
-    )
-    if limit is not None and invalid_limit_conditions:
-        raise Exception("Cannot use `limit` to split geometries when using "
-                        "`add_stats` or `raster_out` options")
+    limit = None if not limit else limit
 
-    if limit is not None and all_touched and not percent_cover_weighting:
-        warnings.warn('Using the `limit` option to split large geometries '
-                      'along with the `all_touched` options without also '
-                      'using the `percent_cover_weighting` option may result '
-                      'in less accurate statistics')
+    if limit is not None:
+
+        try:
+            limit = int(limit)
+        except ValueError:
+            raise ValueError('`limit` must be a number (Input: {0}, {1})'.format(type(limit), limit))
+
+        invalid_limit_stats = [
+            'minority', 'majority', 'median', 'std', 'unique'
+        ] + [s for s in stats if s.startswith('percentile_')]
+
+        invalid_limit_conditions = (
+            any([i in invalid_limit_stats for i in stats])
+            or add_stats is not None
+            or raster_out
+        )
+        if invalid_limit_conditions:
+            raise Exception("Cannot use `limit` to split geometries when using "
+                            "`add_stats` or `raster_out` options")
 
 
     # -------------------------------------------------------------------------
@@ -223,6 +231,12 @@ def gen_zonal_stats(
                           'Using default value of 10.')
             percent_cover_scale = 10
 
+        if percent_cover_scale > 1000:
+            warnings.warn('Using a value for `percent_cover_scale` over 1000 '
+                          'will result in significantly slower processing '
+                          'with little to no meaningful improvements in '
+                          'accuracy. (Maximum suggested value is 100, and '
+                          'for most cases 10 is sufficient.')
         try:
             if percent_cover_scale != int(percent_cover_scale):
                 warnings.warn('Value for `percent_cover_scale` given ({0}) '
@@ -238,23 +252,24 @@ def gen_zonal_stats(
                                     percent_cover_scale))
 
         except:
-            raise Exception('Invalid value for `percent_cover_scale` '
-                            'provided ({0}). Must be type int.'.format(
+            raise ValueError('Invalid value for `percent_cover_scale` '
+                             'provided ({0}). Must be type int.'.format(
                                 percent_cover_scale))
 
         if percent_cover_selection is not None:
             try:
                 percent_cover_selection = float(percent_cover_selection)
             except:
-                raise Exception('Invalid value for `percent_cover_selection` '
-                                'provided ({0}). Must be able to be converted '
-                                'to a float.'.format(percent_cover_selection))
+                raise ValueError('Invalid value for `percent_cover_selection` '
+                                 'provided ({0}). Must be able to be converted '
+                                 'to a float.'.format(percent_cover_selection))
 
-        # if not all_touched:
-        #     warnings.warn('`all_touched` was not enabled but an option requiring '
-        #                   'percent_cover calculations was selected. Automatically '
-        #                   'enabling `all_touched`.')
-        # all_touched = True
+        if not all_touched:
+            warnings.warn('The `all_touched` was not enabled, but an option '
+                          'requiring percent_cover calculations was selected. '
+                          'We suggest enabling `all_touched` when using '
+                          'either `percent_cover_weighting` or '
+                          '`percent_cover_selection`.')
 
 
     with Raster(raster, affine, nodata, band) as rast:
@@ -265,8 +280,6 @@ def gen_zonal_stats(
             if 'Point' in geom.type:
                 geom = boxify_points(geom, rast)
                 percent_cover = False
-
-            geom_bounds = tuple(geom.bounds)
 
 
             # -----------------------------------------------------------------
@@ -291,28 +304,25 @@ def gen_zonal_stats(
 
             sub_feature_stats_list = []
 
-            for sub_geom in geom_list:
+            for sub_geom_box in geom_list:
 
-                sub_geom = shape(sub_geom)
-
-                if 'Point' in sub_geom.type:
-                    sub_geom = boxify_points(sub_geom, rast)
-
-                sub_geom_bounds = tuple(sub_geom.bounds)
+                sub_geom_bounds = tuple(sub_geom_box.bounds)
 
                 fsrc = rast.read(bounds=sub_geom_bounds)
+
 
                 # rasterized geometry
                 if percent_cover:
                     cover_weights = rasterize_pctcover_geom(
-                        sub_geom, shape=fsrc.shape, affine=fsrc.affine,
+                        geom, shape=fsrc.shape, affine=fsrc.affine,
                         scale=percent_cover_scale,
                         all_touched=all_touched)
                     rv_array = cover_weights > (percent_cover_selection or 0)
                 else:
                     rv_array = rasterize_geom(
-                        sub_geom, shape=fsrc.shape, affine=fsrc.affine,
+                        geom, shape=fsrc.shape, affine=fsrc.affine,
                         all_touched=all_touched)
+
 
                 # nodata mask
                 isnodata = (fsrc.array == fsrc.nodata)
@@ -421,9 +431,12 @@ def gen_zonal_stats(
 
                 if 'nodata' in stats or 'nan' in stats:
                     featmasked = np.ma.MaskedArray(fsrc.array, mask=(~rv_array))
-
                     if 'nodata' in stats:
-                        sub_feature_stats['nodata'] = float((featmasked == fsrc.nodata).sum())
+                        nodata_match = (featmasked == fsrc.nodata)
+                        if nodata_match.count() == 0:
+                            sub_feature_stats['nodata'] = 0
+                        else:
+                            sub_feature_stats['nodata'] = nodata_match.sum()
                     if 'nan' in stats:
                         sub_feature_stats['nan'] = float(np.isnan(featmasked).sum()) if has_nan else 0
 
@@ -461,7 +474,7 @@ def gen_zonal_stats(
                 if 'count' in stats:
                     feature_stats['count'] = sum([i['count'] for i in sub_feature_stats_list])
                 if 'sum' in stats:
-                    feature_stats['sum'] = sum([i['sum'] for i in sub_feature_stats_list])
+                    feature_stats['sum'] = sum([i['sum'] for i in sub_feature_stats_list if i['sum']])
                 if 'range' in stats:
                     rmin = min([i['min'] for i in sub_feature_stats_list])
                     rmax = max([i['max'] for i in sub_feature_stats_list])
@@ -471,7 +484,7 @@ def gen_zonal_stats(
                 if 'nan' in stats:
                     feature_stats['nan'] = sum([i['nan'] for i in sub_feature_stats_list])
                 if 'mean' in stats:
-                    feature_stats['mean'] = sum([i['mean'] * i['count'] for i in sub_feature_stats_list]) / sum([i['count'] for i in sub_feature_stats_list])
+                    feature_stats['mean'] = sum([i['mean'] * i['count'] for i in sub_feature_stats_list if i['count']]) / sum([i['count'] for i in sub_feature_stats_list if i['count']])
                 if categorical:
                     for sub_stats in sub_feature_stats_list:
                         for field in sub_stats:
