@@ -592,8 +592,7 @@ def test_geom_split_invalid():
         zonal_stats(polygons, raster, limit=50, raster_out=True)
     with pytest.raises(Exception):
         zonal_stats(polygons, raster, limit=50, zone_func='function')
-    with pytest.warns(Warning):
-        zonal_stats(polygons, raster, limit=50, all_touched=True)
+
 
 
 def test_geom_split_main():
