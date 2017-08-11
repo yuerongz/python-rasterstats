@@ -436,7 +436,7 @@ def gen_zonal_stats(
                         if nodata_match.count() == 0:
                             sub_feature_stats['nodata'] = 0
                         else:
-                            sub_feature_stats['nodata'] = nodata_match.sum()
+                            sub_feature_stats['nodata'] = float(nodata_match.sum())
                     if 'nan' in stats:
                         sub_feature_stats['nan'] = float(np.isnan(featmasked).sum()) if has_nan else 0
 
