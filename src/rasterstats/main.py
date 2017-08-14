@@ -373,28 +373,6 @@ def gen_zonal_stats(
                     else:
                         sub_feature_stats = {}
 
-                    if 'min' in stats:
-                        sub_feature_stats['min'] = float(masked.min())
-                    if 'max' in stats:
-                        sub_feature_stats['max'] = float(masked.max())
-
-                    if 'mean' in stats:
-                        if percent_cover_weighting and latitude_correction:
-                            sub_feature_stats['mean'] = float(
-                                np.sum((masked.T * latitude_scale).T * cover_weights) /
-                                np.sum((~masked.mask.T * latitude_scale).T * cover_weights))
-                        elif percent_cover_weighting:
-                            sub_feature_stats['mean'] = float(
-                                np.sum(masked * cover_weights) /
-                                np.sum(~masked.mask * cover_weights))
-                        elif latitude_correction:
-                            sub_feature_stats['mean'] = float(
-                                np.sum((masked.T * latitude_scale).T) /
-                                np.sum(latitude_scale *
-                                       (masked.shape[1] - np.sum(masked.mask, axis=1))))
-                        else:
-                            sub_feature_stats['mean'] = float(masked.mean())
-
                     if 'count' in stats:
                         if percent_cover_weighting:
                             sub_feature_stats['count'] = float(np.sum(~masked.mask * cover_weights))
@@ -407,6 +385,41 @@ def gen_zonal_stats(
                         else:
                             sub_feature_stats['sum'] = float(masked.sum())
 
+                    if 'mean' in stats:
+                        if percent_cover_weighting and latitude_correction:
+
+                            tmp_numerator = np.sum((masked.T * latitude_scale).T * cover_weights)
+                            tmp_denominator = np.sum((~masked.mask.T * latitude_scale).T * cover_weights)
+                            sub_feature_stats['mean'] = float(tmp_numerator / tmp_denominator)
+                            sub_feature_stats['latitude_correction'] = tmp_denominator / np.sum(~masked.mask * cover_weights)
+
+                        elif percent_cover_weighting:
+
+                            tmp_numerator = np.sum(masked * cover_weights)
+                            tmp_denominator = np.sum(~masked.mask * cover_weights)
+                            sub_feature_stats['mean'] = float(tmp_numerator / tmp_denominator)
+
+                        elif latitude_correction:
+
+                            tmp_numerator =  np.sum((masked.T * latitude_scale).T)
+                            tmp_denominator = np.sum(np.sum(~masked.mask, axis=1) * latitude_scale)
+                            sub_feature_stats['mean'] = float(tmp_numerator / tmp_denominator)
+                            sub_feature_stats['latitude_correction'] = tmp_denominator / np.sum(~masked.mask)
+
+                        else:
+                            sub_feature_stats['mean'] = float(masked.mean())
+
+                    if 'min' in stats:
+                        sub_feature_stats['min'] = float(masked.min())
+                    if 'max' in stats:
+                        sub_feature_stats['max'] = float(masked.max())
+                    if 'range' in stats:
+                        rmin = float(masked.min())
+                        rmax = float(masked.max())
+                        sub_feature_stats['min'] = rmin
+                        sub_feature_stats['max'] = rmax
+                        sub_feature_stats['range'] = rmax - rmin
+
                     if 'std' in stats:
                         sub_feature_stats['std'] = float(masked.std())
                     if 'median' in stats:
@@ -417,12 +430,6 @@ def gen_zonal_stats(
                         sub_feature_stats['minority'] = float(key_assoc_val(pixel_count, min))
                     if 'unique' in stats:
                         sub_feature_stats['unique'] = len(list(pixel_count.keys()))
-                    if 'range' in stats:
-                        rmin = float(masked.min())
-                        rmax = float(masked.max())
-                        sub_feature_stats['min'] = rmin
-                        sub_feature_stats['max'] = rmax
-                        sub_feature_stats['range'] = rmax - rmin
 
                     for pctile in [s for s in stats if s.startswith('percentile_')]:
                         q = get_percentile(pctile)
@@ -459,33 +466,43 @@ def gen_zonal_stats(
 
                 feature_stats = sub_feature_stats_list[0]
 
-                if 'range' in stats and not 'min' in stats:
+                if 'range' in stats and not 'min' in stats and 'min' in feature_stats:
                     del feature_stats['min']
-                if 'range' in stats and not 'max' in stats:
+                if 'range' in stats and not 'max' in stats and 'max' in feature_stats:
                     del feature_stats['max']
+                if latitude_correction and 'mean' in stats and 'latitude_correction' in feature_stats:
+                    del feature_stats['latitude_correction']
 
             else:
                 feature_stats = {}
 
                 if 'count' in stats:
                     feature_stats['count'] = sum([i['count'] for i in sub_feature_stats_list])
+
+                if 'sum' in stats:
+                    vals = [i['sum'] for i in sub_feature_stats_list if i['sum']]
+                    feature_stats['sum'] = sum(vals) if vals else None
+
+                if 'mean' in stats:
+                    valid_means = [i['mean'] for i in sub_feature_stats_list if i['mean'] is not None]
+                    if not valid_means:
+                        feature_stats['mean'] = None
+                    elif latitude_correction:
+                        feature_stats['mean'] = sum([i['mean'] * i['count'] * i['latitude_correction'] for i in sub_feature_stats_list if i['count']]) / sum([i['count'] * i['latitude_correction'] for i in sub_feature_stats_list if i['count']])
+                    else:
+                        feature_stats['mean'] = sum([i['mean'] * i['count'] for i in sub_feature_stats_list if i['count']]) / sum([i['count'] for i in sub_feature_stats_list if i['count']])
+
                 if 'min' in stats:
                     vals = [i['min'] for i in sub_feature_stats_list if i['min'] is not None]
                     feature_stats['min'] = min(vals) if vals else None
                 if 'max' in stats:
                     feature_stats['max'] = max([i['max'] for i in sub_feature_stats_list])
-
                 if 'range' in stats:
                     vals = [i['min'] for i in sub_feature_stats_list if i['min'] is not None]
                     rmin = min(vals) if vals else None
                     rmax = max([i['max'] for i in sub_feature_stats_list])
                     feature_stats['range'] = rmax - rmin if rmin is not None else None
-                if 'mean' in stats:
-                    vals = [i['mean'] * i['count'] for i in sub_feature_stats_list if i['mean'] is not None]
-                    feature_stats['mean'] = sum(vals) / sum([i['count'] for i in sub_feature_stats_list]) if vals else None
-                if 'sum' in stats:
-                    vals = [i['sum'] for i in sub_feature_stats_list if i['sum'] is not None]
-                    feature_stats['sum'] = sum(vals) if vals else None
+
                 if 'nodata' in stats:
                     feature_stats['nodata'] = sum([i['nodata'] for i in sub_feature_stats_list])
                 if 'nan' in stats:
