@@ -44,10 +44,10 @@ def round_to_grid(point, origin, pixel_size):
     """
     x_val, y_val = point
     x_origin, y_origin = origin
-    if x_val < x_origin or y_val > y_origin:
-        raise Exception("Longitude/latitude values for point cannot be outside "
-                        "the box with upper left corner defined by origin "
-                        "[point: {0}, origin: {1}].".format(point, origin))
+    # if x_val < x_origin or y_val > y_origin:
+    #     raise Exception("Longitude/latitude values for point cannot be outside "
+    #                     "the box with upper left corner defined by origin "
+    #                     "[point: {0}, origin: {1}].".format(point, origin))
     adj_x_val = round((x_val - x_origin) / pixel_size) * pixel_size + x_origin
     adj_y_val = y_origin - round((y_origin - y_val) / pixel_size) * pixel_size
     return (adj_x_val, adj_y_val)
@@ -71,6 +71,7 @@ def split_geom(geom, limit, pixel_size, origin=None):
     """
     split_geom_list = []
 
+    # bounds format: minx, miny, maxx, maxy
     gb = tuple(geom.bounds)
 
     x_size = (gb[2] - gb[0]) / pixel_size
@@ -94,18 +95,29 @@ def split_geom(geom, limit, pixel_size, origin=None):
         box_a_bounds = (gb[0], gb[1], gb[2], y_split-pixel_size*0.0000001)
         box_b_bounds = (gb[0], y_split+pixel_size*0.0000001, gb[2], gb[3])
 
-    # minx, miny, maxx, maxy
+
+    # box_a = box(*box_a_bounds)
+    # split_a = split_geom(box_a, limit, pixel_size, origin=origin)
+    # split_geom_list += split_a
+
     box_a = box(*box_a_bounds)
-    split_a = split_geom(box_a, limit, pixel_size, origin=origin)
-    # geom_a = geom.intersection(box_a)
-    # split_a = split_geom(geom_a, limit, pixel_size, origin=origin)
-    split_geom_list += split_a
+    geom_a = geom.intersection(box_a)
+
+    if geom_a.area > 0:
+        split_a = split_geom(geom_a, limit, pixel_size, origin=origin)
+        split_geom_list += split_a
+
+
+    # box_b = box(*box_b_bounds)
+    # split_b = split_geom(box_b, limit, pixel_size, origin=origin)
+    # split_geom_list += split_b
 
     box_b = box(*box_b_bounds)
-    split_b = split_geom(box_b, limit, pixel_size, origin=origin)
-    # geom_b = geom.intersection(box_b)
-    # split_b = split_geom(geom_b, limit, pixel_size, origin=origin)
-    split_geom_list += split_b
+    geom_b = geom.intersection(box_b)
+
+    if geom_b.area > 0:
+        split_b = split_geom(geom_b, limit, pixel_size, origin=origin)
+        split_geom_list += split_b
 
     return split_geom_list
 

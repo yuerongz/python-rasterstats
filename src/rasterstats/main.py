@@ -93,6 +93,7 @@ def gen_zonal_stats(
         Weights cell values when generating statistics based on latitude
         (using haversine function) in order to account for actual area
         represented by pixel cell.
+
     percent_cover_selection: float, optional
         Include only raster cells that have at least the given percent
         covered by the vector feature. Requires percent_cover_scale argument
