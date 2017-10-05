@@ -53,7 +53,7 @@ def round_to_grid(point, origin, pixel_size):
     return (adj_x_val, adj_y_val)
 
 
-def split_geom(geom, limit, pixel_size, origin=None):
+def split_geom(geom, limit, pixel_size):
     """ split geometry into smaller geometries
 
     used to convert large features into multiple smaller features
@@ -67,59 +67,49 @@ def split_geom(geom, limit, pixel_size, origin=None):
 
     Returns
     -------
-    list of geometries
+    yield split geometries
+
     """
-    split_geom_list = []
-
     # bounds format: minx, miny, maxx, maxy
-    gb = tuple(geom.bounds)
+    true_minx, true_miny, true_maxx, true_maxy = tuple(geom.bounds)
 
-    x_size = (gb[2] - gb[0]) / pixel_size
-    y_size = (gb[3] - gb[1]) / pixel_size
-    total_size = x_size * y_size
+    init_dim = math.floor(math.sqrt(limit))
+    pixel_step = init_dim * pixel_size
 
-    if total_size < limit:
-        return [geom]
+    # pixel adjustment to offset edges slightly
+    # prevents overlap issues with rasterization
+    pa = pixel_size * 0.0000001
 
-    if x_size > y_size:
-        x_split = gb[2] - (gb[2]-gb[0])/2
-        if origin is not None:
-            x_split, _ = round_to_grid((x_split, origin[1]), origin, pixel_size)
-        box_a_bounds = (gb[0], gb[1], x_split-pixel_size*0.0000001, gb[3])
-        box_b_bounds = (x_split+pixel_size*0.0000001, gb[1], gb[2], gb[3])
+    # init value one row above true bounding box
+    # so row loop can iterate without additional checks
+    maxy = true_maxy + pixel_step
 
-    else:
-        y_split = gb[3] - (gb[3]-gb[1])/2
-        if origin is not None:
-            _, y_split = round_to_grid((origin[0], y_split), origin, pixel_size)
-        box_a_bounds = (gb[0], gb[1], gb[2], y_split-pixel_size*0.0000001)
-        box_b_bounds = (gb[0], y_split+pixel_size*0.0000001, gb[2], gb[3])
+    # end after final row
+    while maxy > true_miny:
 
+        # reset minx each loop
+        # init value one col to left of true bounding box
+        # so col loop can iterate without additional checks
+        minx = true_minx - pixel_step
 
-    # box_a = box(*box_a_bounds)
-    # split_a = split_geom(box_a, limit, pixel_size, origin=origin)
-    # split_geom_list += split_a
+        maxy = maxy - pixel_step
+        miny = maxy - pixel_step
 
-    box_a = box(*box_a_bounds)
-    geom_a = geom.intersection(box_a)
+        # reset after final col for each row
+        while minx < true_maxx:
 
-    if geom_a.area > 0:
-        split_a = split_geom(geom_a, limit, pixel_size, origin=origin)
-        split_geom_list += split_a
+            minx = minx + pixel_step
+            maxx = minx + pixel_step
 
+            tmp_box = box(minx+pa, miny+pa, maxx-pa, maxy-pa)
+            tmp_geom = geom.intersection(tmp_box)
 
-    # box_b = box(*box_b_bounds)
-    # split_b = split_geom(box_b, limit, pixel_size, origin=origin)
-    # split_geom_list += split_b
-
-    box_b = box(*box_b_bounds)
-    geom_b = geom.intersection(box_b)
-
-    if geom_b.area > 0:
-        split_b = split_geom(geom_b, limit, pixel_size, origin=origin)
-        split_geom_list += split_b
-
-    return split_geom_list
+            # check geom intersection to validate but only return
+            # box since we are just using it to read raster window.
+            # the shape/affine from raster instance  will then be
+            # used to read in proper extents of split geom
+            if tmp_geom.area > 0:
+                yield tmp_box
 
 
 def rasterize_geom(geom, shape, affine, all_touched=False):

@@ -297,7 +297,7 @@ def gen_zonal_stats(
 
                 pixel_size = rast.affine[0]
                 origin = (rast.affine[2], rast.affine[5])
-                geom_list = split_geom(geom, limit, pixel_size, origin=origin)
+                geom_list = split_geom(geom, limit, pixel_size)
 
 
             # -----------------------------------------------------------------
@@ -463,7 +463,7 @@ def gen_zonal_stats(
             # -----------------------------------------------------------------
             # aggregate sub geom extracts
 
-            if len(geom_list) == 1:
+            if len(sub_feature_stats_list) == 1:
 
                 feature_stats = sub_feature_stats_list[0]
 
