@@ -3,6 +3,7 @@ from __future__ import absolute_import
 from __future__ import division
 import sys
 import math
+from copy import copy
 from rasterio import features
 from affine import Affine
 from numpy import min_scalar_type
@@ -88,7 +89,11 @@ def split_geom(geom, limit, pixel_size, origin=None):
 
     # init value one row above true bounding box
     # so row loop can iterate without additional checks
-    maxy = base_maxy + pixel_step
+    base_maxy = base_maxy + pixel_step * 2
+
+    maxy = copy(base_maxy)
+
+    base_minx = base_minx - pixel_step * 2
 
     # end after final row
     while maxy > true_miny:
@@ -96,7 +101,7 @@ def split_geom(geom, limit, pixel_size, origin=None):
         # reset minx each loop
         # init value one col to left of true bounding box
         # so col loop can iterate without additional checks
-        minx = base_minx - pixel_step
+        minx = copy(base_minx) #- pixel_step
 
         maxy = maxy - pixel_step
         miny = maxy - pixel_step
