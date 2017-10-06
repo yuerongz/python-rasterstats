@@ -80,7 +80,7 @@ def split_geom(geom, limit, pixel_size, origin):
 
     # pixel adjustment to offset edges slightly
     # prevents overlap issues with rasterization
-    pa = pixel_size * 0.000000001
+    pa = pixel_size * 0.000001
 
     # round true top left reference points to align with raster grid
     base_minx, base_maxy = round_to_grid((true_minx, true_maxy), origin, pixel_size)
