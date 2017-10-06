@@ -496,11 +496,13 @@ def gen_zonal_stats(
                     vals = [i['min'] for i in sub_feature_stats_list if i['min'] is not None]
                     feature_stats['min'] = min(vals) if vals else None
                 if 'max' in stats:
-                    feature_stats['max'] = max([i['max'] for i in sub_feature_stats_list])
+                    vals = [i['max'] for i in sub_feature_stats_list if i['max'] is not None]
+                    feature_stats['max'] = max(vals) if vals else None
                 if 'range' in stats:
-                    vals = [i['min'] for i in sub_feature_stats_list if i['min'] is not None]
+                    min_vals = [i['min'] for i in sub_feature_stats_list if i['min'] is not None]
+                    max_vals = [i['max'] for i in sub_feature_stats_list if i['max'] is not None]
                     rmin = min(vals) if vals else None
-                    rmax = max([i['max'] for i in sub_feature_stats_list])
+                    rmax = max(vals) if vals else None
                     feature_stats['range'] = rmax - rmin if rmin is not None else None
 
                 if 'nodata' in stats:
