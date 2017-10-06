@@ -297,7 +297,7 @@ def gen_zonal_stats(
 
                 pixel_size = rast.affine[0]
                 origin = (rast.affine[2], rast.affine[5])
-                geom_list = split_geom(geom, limit, pixel_size)
+                geom_list = split_geom(geom, limit, pixel_size, origin=origin)
 
 
             # -----------------------------------------------------------------
@@ -340,7 +340,6 @@ def gen_zonal_stats(
                 masked = np.ma.MaskedArray(
                     fsrc.array,
                     mask=(isnodata | ~rv_array))
-
 
                 # execute zone_func on masked zone ndarray
                 if zone_func is not None:

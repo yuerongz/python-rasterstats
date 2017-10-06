@@ -53,7 +53,7 @@ def round_to_grid(point, origin, pixel_size):
     return (adj_x_val, adj_y_val)
 
 
-def split_geom(geom, limit, pixel_size):
+def split_geom(geom, limit, pixel_size, origin=None):
     """ split geometry into smaller geometries
 
     used to convert large features into multiple smaller features
@@ -80,9 +80,15 @@ def split_geom(geom, limit, pixel_size):
     # prevents overlap issues with rasterization
     pa = pixel_size * 0.0000001
 
+    if origin is not None:
+        # round true top left reference points to align with raster grid
+        base_minx, base_maxy = round_to_grid((true_minx, true_maxy), origin, pixel_size)
+    else:
+        base_minx, base_maxy = (true_minx, true_maxy)
+
     # init value one row above true bounding box
     # so row loop can iterate without additional checks
-    maxy = true_maxy + pixel_step
+    maxy = base_maxy + pixel_step
 
     # end after final row
     while maxy > true_miny:
@@ -90,7 +96,7 @@ def split_geom(geom, limit, pixel_size):
         # reset minx each loop
         # init value one col to left of true bounding box
         # so col loop can iterate without additional checks
-        minx = true_minx - pixel_step
+        minx = base_minx - pixel_step
 
         maxy = maxy - pixel_step
         miny = maxy - pixel_step
@@ -109,7 +115,7 @@ def split_geom(geom, limit, pixel_size):
             # the shape/affine from raster instance  will then be
             # used to read in proper extents of split geom
             if tmp_geom.area > 0:
-                yield tmp_box
+                yield tmp_geom
 
 
 def rasterize_geom(geom, shape, affine, all_touched=False):
