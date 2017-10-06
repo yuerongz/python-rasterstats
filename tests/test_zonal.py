@@ -394,7 +394,7 @@ def test_geojson_out():
 # since the read_features func for this data type is generating
 # the properties field
 def test_geojson_out_with_no_properties():
-    polygon = Polygon([[0, 0], [0, 0,5], [1, 1.5], [1.5, 2], [2, 2], [2, 0]])
+    polygon = Polygon([[0, 0], [0, 1.5], [1, 1.5], [1, 2], [2, 2], [2, 0]])
     arr = np.array([
         [100, 1],
         [100, 1]
@@ -407,7 +407,7 @@ def test_geojson_out_with_no_properties():
     for key in ['count', 'min', 'max', 'mean']:
         assert key in stats[0]['properties']
 
-    assert stats[0]['properties']['mean'] == 34
+    assert stats[0]['properties']['mean'] == 50.5
 
 
 # remove when copy_properties alias is removed
@@ -528,7 +528,8 @@ def test_nan_counts():
 # percent cover and latitude correction tests
 
 def test_percent_cover_zonal_stats():
-    polygon = Polygon([[0, 0], [0, 0,5], [1, 1.5], [1.5, 2], [2, 2], [2, 0]])
+    polygon = Polygon([[0, 0], [0, 1.5], [1, 1.5], [1, 2], [2, 2], [2, 0]])
+
     arr = np.array([
         [100, 1],
         [100, 1]
@@ -539,18 +540,21 @@ def test_percent_cover_zonal_stats():
     stats_options = 'min max mean count sum nodata'
 
     # run base case
+    # includes cell that is only 50% covered
     stats_a = zonal_stats(polygon, arr, affine=affine, stats=stats_options)
-    assert stats_a[0]['mean'] == 34
+    assert stats_a[0]['mean'] == 50.5
 
     # test selection
+    # does not include cell that is only 50% covered
     stats_b = zonal_stats(polygon, arr, affine=affine, percent_cover_selection=0.75, percent_cover_scale=10, stats=stats_options)
-    assert stats_b[0]['mean'] == 1
+    assert round(stats_b[0]['count'], 2) == 3
+    assert round(stats_b[0]['mean'], 2) ==  34
 
     # test weighting
     stats_c = zonal_stats(polygon, arr, affine=affine, percent_cover_weighting=True, percent_cover_scale=10, stats=stats_options)
-    assert round(stats_c[0]['count'], 2) == 2.6
-    assert round(stats_c[0]['mean'], 2) == 29.56
-    assert round(stats_c[0]['sum'], 2) == 76.85
+    assert round(stats_c[0]['count'], 1) == 3.5
+    assert round(stats_c[0]['mean'], 1) == 43.4
+    assert round(stats_c[0]['sum'], 1) == 152
 
     # check that percent_cover_scale is set to 10 when not provided by user
     stats_d = zonal_stats(polygon, arr, affine=affine, percent_cover_weighting=True, stats=stats_options)
@@ -618,7 +622,7 @@ def test_geom_split_categorical():
     polygons = os.path.join(DATA, 'polygons.shp')
     categorical_raster = os.path.join(DATA, 'slope_classes.tif')
     stats1 = zonal_stats(polygons, categorical_raster, categorical=True)
-    stats2 = zonal_stats(polygons, categorical_raster, categorical=True, limit=50)
+    stats2 = zonal_stats(polygons, categorical_raster, percent_cover_weighting=True, categorical=True, limit=50)
     assert len(stats1) == len(stats2) == 2
     assert stats1[0][1.0] == stats2[0][1.0]  == 75
     assert 5.0 in stats1[1] and 5.0 in stats2[1]

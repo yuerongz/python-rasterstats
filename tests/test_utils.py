@@ -122,15 +122,13 @@ def test_rasterize_pctcover_geom():
 
 def test_split_geom():
     polygon_a = box(0, 0, 10, 10)
-    geom_list_a = split_geom(polygon_a, limit=40, pixel_size=1)
-    assert len(geom_list_a) == 4
+    geom_list_a = list(split_geom(polygon_a, limit=40, pixel_size=1, origin=(0, 10)))
     for i in geom_list_a:
-        assert round(i.area, 5) == 25
+        assert round(i.area, 5) < 40
     polygon_b =  Point(0,0).buffer(10)
-    geom_list_b = split_geom(polygon_b, limit=150, pixel_size=1)
-    assert len(geom_list_b) == 4
+    geom_list_b = list(split_geom(polygon_b, limit=75, pixel_size=1, origin=(-10, 10)))
     for i in geom_list_b:
-        assert round(i.area) == 78 # roughly (pi*100/4), or 1/4 of polygon_b
+        assert round(i.area) == 75
 
 
 
