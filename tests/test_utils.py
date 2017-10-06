@@ -128,7 +128,7 @@ def test_split_geom():
     polygon_b =  Point(0,0).buffer(10)
     geom_list_b = list(split_geom(polygon_b, limit=75, pixel_size=1, origin=(-10, 10)))
     for i in geom_list_b:
-        assert round(i.area) == 75
+        assert round(i.area) < 75
 
 
 
