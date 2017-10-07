@@ -287,13 +287,14 @@ def gen_zonal_stats(
             # -----------------------------------------------------------------
             # build geom_list (split geoms if needed)
 
-
+            use_temp_count = False
             if limit is None:
                 geom_list = [geom]
 
             else:
                 # need count for sub geoms to calculate weighted mean
                 if 'mean' in stats and not 'count' in stats:
+                    use_temp_count = True
                     stats.append('count')
 
                 pixel_size = rast.affine[0]
@@ -464,6 +465,7 @@ def gen_zonal_stats(
                 else:
 
                     tmp_feature_stats = copy(feature_stats)
+                    feature_stats = {}
                     sub_feature_stats_list = [tmp_feature_stats, sub_feature_stats]
 
                     if 'count' in stats:
@@ -519,6 +521,9 @@ def gen_zonal_stats(
 
             if latitude_correction and 'mean' in stats and 'latitude_correction' in feature_stats:
                 del feature_stats['latitude_correction']
+
+            if use_temp_count:
+                del feature_stats['count']
 
             if prefix is not None:
                 prefixed_feature_stats = {}
