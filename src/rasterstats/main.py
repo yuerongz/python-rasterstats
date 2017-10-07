@@ -3,6 +3,7 @@ from __future__ import absolute_import
 from __future__ import division
 import numpy as np
 import warnings
+from copy import copy
 from affine import Affine
 from shapely.geometry import shape
 from .io import read_features, Raster
@@ -303,9 +304,7 @@ def gen_zonal_stats(
             # -----------------------------------------------------------------
             # run sub geom extracts
 
-            sub_feature_stats_list = []
-
-            for sub_geom_box in geom_list:
+            for ix, sub_geom_box in enumerate(geom_list):
 
                 sub_geom_bounds = tuple(sub_geom_box.bounds)
 
@@ -456,70 +455,70 @@ def gen_zonal_stats(
                     sub_feature_stats['mini_raster_affine'] = fsrc.affine
                     sub_feature_stats['mini_raster_nodata'] = fsrc.nodata
 
-                sub_feature_stats_list.append(sub_feature_stats)
+
+                # -----------------------------------------------------------------
+                # aggregate sub geom extracts
+
+                if ix == 0:
+                    feature_stats = copy(sub_feature_stats)
+                else:
+
+                    tmp_feature_stats = copy(feature_stats)
+                    sub_feature_stats_list = [tmp_feature_stats, sub_feature_stats]
+
+                    if 'count' in stats:
+                        feature_stats['count'] = sum([i['count'] for i in sub_feature_stats_list])
+
+                    if 'sum' in stats:
+                        vals = [i['sum'] for i in sub_feature_stats_list if i['sum']]
+                        feature_stats['sum'] = sum(vals) if vals else None
+
+                    if 'mean' in stats:
+                        valid_means = [i['mean'] for i in sub_feature_stats_list if i['mean'] is not None]
+                        if not valid_means:
+                            feature_stats['mean'] = None
+                        elif latitude_correction:
+                            feature_stats['latitude_correction'] = sum([i['count'] * i['latitude_correction'] for i in sub_feature_stats_list if i['count']]) / sum([i['count'] for i in sub_feature_stats_list if i['count']])
+                            feature_stats['mean'] = sum([i['mean'] * i['count'] * i['latitude_correction'] for i in sub_feature_stats_list if i['count']]) / sum([i['count'] * i['latitude_correction'] for i in sub_feature_stats_list if i['count']])
+                        else:
+                            feature_stats['mean'] = sum([i['mean'] * i['count'] for i in sub_feature_stats_list if i['count']]) / sum([i['count'] for i in sub_feature_stats_list if i['count']])
+
+                    if 'min' in stats:
+                        vals = [i['min'] for i in sub_feature_stats_list if i['min'] is not None]
+                        feature_stats['min'] = min(vals) if vals else None
+                    if 'max' in stats:
+                        vals = [i['max'] for i in sub_feature_stats_list if i['max'] is not None]
+                        feature_stats['max'] = max(vals) if vals else None
+                    if 'range' in stats:
+                        min_vals = [i['min'] for i in sub_feature_stats_list if i['min'] is not None]
+                        max_vals = [i['max'] for i in sub_feature_stats_list if i['max'] is not None]
+                        rmin = min(vals) if vals else None
+                        rmax = max(vals) if vals else None
+                        feature_stats['range'] = rmax - rmin if rmin is not None else None
+
+                    if 'nodata' in stats:
+                        feature_stats['nodata'] = sum([i['nodata'] for i in sub_feature_stats_list])
+                    if 'nan' in stats:
+                        feature_stats['nan'] = sum([i['nan'] for i in sub_feature_stats_list])
+
+                    if categorical:
+                        for sub_stats in sub_feature_stats_list:
+                            for field in sub_stats:
+                                if field not in VALID_STATS:
+                                    if field not in feature_stats:
+                                        feature_stats[field] = sub_stats[field]
+                                    else:
+                                        feature_stats[field] += sub_stats[field]
 
 
-            # -----------------------------------------------------------------
-            # aggregate sub geom extracts
-
-            if len(sub_feature_stats_list) == 1:
-
-                feature_stats = sub_feature_stats_list[0]
-
+            if ix == 0:
                 if 'range' in stats and not 'min' in stats and 'min' in feature_stats:
                     del feature_stats['min']
                 if 'range' in stats and not 'max' in stats and 'max' in feature_stats:
                     del feature_stats['max']
-                if latitude_correction and 'mean' in stats and 'latitude_correction' in feature_stats:
-                    del feature_stats['latitude_correction']
 
-            else:
-                feature_stats = {}
-
-                if 'count' in stats:
-                    feature_stats['count'] = sum([i['count'] for i in sub_feature_stats_list])
-
-                if 'sum' in stats:
-                    vals = [i['sum'] for i in sub_feature_stats_list if i['sum']]
-                    feature_stats['sum'] = sum(vals) if vals else None
-
-                if 'mean' in stats:
-                    valid_means = [i['mean'] for i in sub_feature_stats_list if i['mean'] is not None]
-                    if not valid_means:
-                        feature_stats['mean'] = None
-                    elif latitude_correction:
-                        feature_stats['mean'] = sum([i['mean'] * i['count'] * i['latitude_correction'] for i in sub_feature_stats_list if i['count']]) / sum([i['count'] * i['latitude_correction'] for i in sub_feature_stats_list if i['count']])
-                    else:
-                        feature_stats['mean'] = sum([i['mean'] * i['count'] for i in sub_feature_stats_list if i['count']]) / sum([i['count'] for i in sub_feature_stats_list if i['count']])
-
-                if 'min' in stats:
-                    vals = [i['min'] for i in sub_feature_stats_list if i['min'] is not None]
-                    feature_stats['min'] = min(vals) if vals else None
-                if 'max' in stats:
-                    vals = [i['max'] for i in sub_feature_stats_list if i['max'] is not None]
-                    feature_stats['max'] = max(vals) if vals else None
-                if 'range' in stats:
-                    min_vals = [i['min'] for i in sub_feature_stats_list if i['min'] is not None]
-                    max_vals = [i['max'] for i in sub_feature_stats_list if i['max'] is not None]
-                    rmin = min(vals) if vals else None
-                    rmax = max(vals) if vals else None
-                    feature_stats['range'] = rmax - rmin if rmin is not None else None
-
-                if 'nodata' in stats:
-                    feature_stats['nodata'] = sum([i['nodata'] for i in sub_feature_stats_list])
-                if 'nan' in stats:
-                    feature_stats['nan'] = sum([i['nan'] for i in sub_feature_stats_list])
-
-                if categorical:
-                    for sub_stats in sub_feature_stats_list:
-                        for field in sub_stats:
-                            if field not in VALID_STATS:
-                                if field not in feature_stats:
-                                    feature_stats[field] = sub_stats[field]
-                                else:
-                                    feature_stats[field] += sub_stats[field]
-
-
+            if latitude_correction and 'mean' in stats and 'latitude_correction' in feature_stats:
+                del feature_stats['latitude_correction']
 
             if prefix is not None:
                 prefixed_feature_stats = {}
