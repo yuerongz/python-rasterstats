@@ -222,6 +222,12 @@ def gen_zonal_stats(
             raise Exception("Cannot use `limit` to split geometries when using "
                             "`add_stats` or `raster_out` options")
 
+        # need count for sub geoms to calculate weighted mean
+        use_temp_count = False
+        if 'mean' in stats and not 'count' in stats:
+            use_temp_count = True
+            stats.append('count')
+
 
     # -------------------------------------------------------------------------
     # check inputs related to percent coverage
@@ -287,16 +293,10 @@ def gen_zonal_stats(
             # -----------------------------------------------------------------
             # build geom_list (split geoms if needed)
 
-            use_temp_count = False
             if limit is None:
                 geom_list = [geom]
 
             else:
-                # need count for sub geoms to calculate weighted mean
-                if 'mean' in stats and not 'count' in stats:
-                    use_temp_count = True
-                    stats.append('count')
-
                 pixel_size = rast.affine[0]
                 origin = (rast.affine[2], rast.affine[5])
                 geom_list = split_geom(geom, limit, pixel_size, origin=origin)
@@ -522,6 +522,7 @@ def gen_zonal_stats(
             if latitude_correction and 'mean' in stats and 'latitude_correction' in feature_stats:
                 del feature_stats['latitude_correction']
 
+            print use_temp_count
             if use_temp_count:
                 del feature_stats['count']
 
