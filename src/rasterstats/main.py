@@ -522,8 +522,7 @@ def gen_zonal_stats(
             if latitude_correction and 'mean' in stats and 'latitude_correction' in feature_stats:
                 del feature_stats['latitude_correction']
 
-            print use_temp_count
-            if use_temp_count:
+            if limit is not None and use_temp_count:
                 del feature_stats['count']
 
             if prefix is not None:
